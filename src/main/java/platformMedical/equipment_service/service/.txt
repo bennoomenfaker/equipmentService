@@ -1,0 +1,245 @@
+package platformMedical.equipment_service.service;
+
+import lombok.AllArgsConstructor;
+import org.springframework.stereotype.Service;
+import platformMedical.equipment_service.entity.*;
+import platformMedical.equipment_service.entity.DTOs.EquipmentRequest;
+import platformMedical.equipment_service.repository.*;
+
+import java.util.*;
+
+@Service
+@AllArgsConstructor
+public class EquipmentService {
+
+    private final EquipmentRepository equipmentRepository;
+    private final EmdnNomenclatureRepository emdnNomenclatureRepository;
+    private final BrandRepository brandRepository;
+    private final SparePartRepository sparePartRepository;
+    private final MaintenancePlanRepository maintenancePlanRepository;
+    private final SLARepository slaRepository;
+
+    // Générer un code série unique
+    private String generateSerialCode() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
+    }
+
+    // Création d'un équipement par le Ministère de la Santé
+    public Equipment createEquipment(EquipmentRequest request) {
+          // Récupérer l'objet EmdnNomenclature à partir du code EMDN
+                EmdnNomenclature emdnCode = findByCodeRecursive(equipmentRequest.getEmdnCode())
+                        .orElseThrow(() -> new RuntimeException("Code EMDN non trouvé"));
+
+        String serialNumber = generateSerialCode();
+
+        Equipment equipment = Equipment.builder()
+                .nom(request.getNom())
+                .emdnCode(emdn)
+                .lifespan(request.getLifespan())
+                .riskClass(request.getRiskClass())
+                .hospitalId(request.getHospitalId())
+                .serialCode(serialNumber)
+                .reception(false)
+                .status("En attente de réception")
+                .build();
+
+        return equipmentRepository.save(equipment);
+    }
+
+
+    public Equipment updateEquipmentAfterReception(String serialNumber, EquipmentRequest request) {
+        Equipment equipment = equipmentRepository.findBySerialCode(serialNumber)
+                .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
+        if (equipment.isReception()) {
+            throw new RuntimeException("L'équipement a déjà été réceptionné");
+        }
+
+        Brand brand = brandRepository.findByName(request.getBrandName())
+                .orElseGet(() -> brandRepository.save(Brand.builder().name(request.getBrandName()).build()));
+
+        equipment.setBrand(brand);
+        equipment.setReception(true);
+        equipment.setStatus("En service");
+        equipment.setSupplier(request.getSupplier());
+        equipment.setAcquisitionDate(request.getAcquisitionDate());
+        equipment.setAmount(request.getAmount());
+        equipment.setWarranty(request.getWarranty());
+        equipment.setServiceId(request.getServiceId());
+        equipment.setSlaId(request.getSlaId());
+
+        // Stocker les IDs des pièces de rechange
+        if (request.getSparePartIds() != null && !request.getSparePartIds().isEmpty()) {
+            List<SparePart> spareParts = sparePartRepository.findAllById(request.getSparePartIds());
+            if (spareParts.size() != request.getSparePartIds().size()) {
+                throw new RuntimeException("Certaines pièces de rechange n'existent pas en base.");
+            }
+            equipment.setSparePartIds(request.getSparePartIds());
+        }
+
+
+        return equipmentRepository.save(equipment);
+    }
+
+
+    // Ajouter un plan de maintenance préventive à un équipement
+    public Equipment addMaintenancePlan(String equipmentId, MaintenancePlan maintenancePlan) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+                .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
+        // Associer le plan de maintenance à l'équipement
+        maintenancePlan.setEquipmentId(equipmentId);
+        maintenancePlanRepository.save(maintenancePlan);
+
+        // Ajouter le plan de maintenance à la liste de l'équipement
+        equipment.getMaintenancePlans().add(maintenancePlan);
+        return equipmentRepository.save(equipment);
+    }
+
+    // Récupérer tous les équipements d'un hôpital
+    public List<Equipment> getEquipmentByHospitalId(String hospitalId) {
+        return equipmentRepository.findByHospitalIdAndReception(hospitalId,true);
+    }
+
+    // Récupérer toutes les pièces de rechange d'un équipement
+    public List<SparePart> getSparePartsByEquipmentId(String equipmentId) {
+        return sparePartRepository.findByEquipmentId(equipmentId);
+    }
+
+    // Ajouter une pièce de rechange à un équipement
+    public Equipment addSparePart(String equipmentId, SparePart sparePart) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+                .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
+        // Associer la pièce de rechange à l'équipement
+        sparePart.setEquipmentId(equipmentId);
+        sparePart = sparePartRepository.save(sparePart); // Sauvegarde et récupération de l'objet mis à jour
+
+        // Ajouter l'ID de la pièce de rechange dans la liste (éviter les doublons)
+        if (!equipment.getSparePartIds().contains(sparePart.getId())) {
+            equipment.getSparePartIds().add(sparePart.getId());
+        }
+
+        return equipmentRepository.save(equipment);
+    }
+
+
+    // Mettre à jour les informations d'un équipement (ex: warranty, status, etc.)
+    public Equipment updateEquipment(String equipmentId, EquipmentRequest equipmentRequest) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+                .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
+        // Vérifier que les champs obligatoires sont présents
+        if (equipmentRequest.getEmdnCode() == null || equipmentRequest.getLifespan() <= 0 || equipmentRequest.getRiskClass() == null) {
+            throw new IllegalArgumentException("Les champs obligatoires (code EMDN, lifespan, riskClass) doivent être renseignés.");
+        }
+
+        // Vérifier si un équipement avec le même nom existe déjà, en excluant l'équipement actuel
+        if (!equipmentRequest.getNom().equals(equipment.getNom())) {
+            Optional<Equipment> existingEquipment = equipmentRepository.findByNom(equipmentRequest.getNom());
+            if (existingEquipment.isPresent()) {
+                throw new RuntimeException("Un équipement avec ce nom existe déjà dans la base de données.");
+            }
+        }
+
+
+         public Optional<EmdnNomenclature> findByCodeRecursive(String code) {
+                List<EmdnNomenclature> allNomenclatures = emdnNomenclatureRepository.findAll();
+                for (EmdnNomenclature nomenclature : allNomenclatures) {
+                    Optional<EmdnNomenclature> found = findByCodeInSubtypes(nomenclature, code);
+                    if (found.isPresent()) {
+                        return found;
+                    }
+                }
+                return Optional.empty();
+
+
+            }
+            private Optional<EmdnNomenclature> findByCodeInSubtypes(EmdnNomenclature nomenclature, String code) {
+                if (nomenclature.getCode().equals(code)) {
+                    return Optional.of(nomenclature);
+                }
+                if (nomenclature.getSubtypes() != null) {
+                    for (EmdnNomenclature subtype : nomenclature.getSubtypes()) {
+                        Optional<EmdnNomenclature> found = findByCodeInSubtypes(subtype, code);
+                        if (found.isPresent()) {
+                            return found;
+                        }
+                    }
+                }
+                return Optional.empty();
+            }
+
+        // Récupérer ou créer la marque à partir du nom
+        Brand brand = brandRepository.findByName(equipmentRequest.getBrandName())
+                .orElseGet(() -> brandRepository.save(Brand.builder().name(equipmentRequest.getBrandName()).build()));
+
+        // Récupérer les pièces de rechange à partir des IDs
+        List<String> sparePartIds = new ArrayList<>();
+
+        if (equipmentRequest.getSparePartIds() != null && !equipmentRequest.getSparePartIds().isEmpty()) {
+            sparePartIds.addAll(equipmentRequest.getSparePartIds()); // Stocker uniquement les IDs
+        }
+
+        // Mettre à jour les champs modifiables
+        equipment.setEmdnCode(emdnCode);
+        equipment.setNom(equipmentRequest.getNom());
+        equipment.setAcquisitionDate(equipmentRequest.getAcquisitionDate());
+        equipment.setSupplier(equipmentRequest.getSupplier());
+        equipment.setRiskClass(equipmentRequest.getRiskClass());
+        equipment.setAmount(equipmentRequest.getAmount());
+        equipment.setLifespan(equipmentRequest.getLifespan());
+        equipment.setWarranty(equipmentRequest.getWarranty());
+        equipment.setServiceId(equipmentRequest.getServiceId());
+        equipment.setHospitalId(equipmentRequest.getHospitalId());
+        equipment.setBrand(brand);
+        equipment.setSparePartIds(sparePartIds); // Stocke les IDs des SpareParts
+        equipment.setReception(true);
+
+        return equipmentRepository.save(equipment);
+    }
+
+    public Optional<EmdnNomenclature> findByCodeRecursive(String code) {
+        List<EmdnNomenclature> allNomenclatures = emdnNomenclatureRepository.findAll();
+        for (EmdnNomenclature nomenclature : allNomenclatures) {
+            Optional<EmdnNomenclature> found = findByCodeInSubtypes(nomenclature, code);
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
+
+
+    }
+    private Optional<EmdnNomenclature> findByCodeInSubtypes(EmdnNomenclature nomenclature, String code) {
+        if (nomenclature.getCode().equals(code)) {
+            return Optional.of(nomenclature);
+        }
+        if (nomenclature.getSubtypes() != null) {
+            for (EmdnNomenclature subtype : nomenclature.getSubtypes()) {
+                Optional<EmdnNomenclature> found = findByCodeInSubtypes(subtype, code);
+                if (found.isPresent()) {
+                    return found;
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public Optional<Equipment> findBySerialNumber(String serialCode) {
+        return equipmentRepository.findBySerialCode(serialCode);
+    }
+
+    public Equipment assignSlaToEquipment(String equipmentId, String slaId) {
+        Equipment equipment = equipmentRepository.findById(equipmentId)
+                .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
+            SLA sla = slaRepository.findById(slaId)
+                .orElseThrow(() -> new RuntimeException("SLA non trouvé"));
+        equipment.setSlaId(sla.getId());
+        return equipmentRepository.save(equipment);
+    }
+
+
+
+}
