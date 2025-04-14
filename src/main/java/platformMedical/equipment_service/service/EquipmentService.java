@@ -58,7 +58,7 @@ public class EquipmentService {
                 .hospitalId(request.getHospitalId())
                 .serialCode(serialNumber)
                 .reception(false)
-                .status("En attente de réception")
+                .status("en attente de réception")
                 .build();
         Equipment saveEquipment = equipmentRepository.save(equipment);
 

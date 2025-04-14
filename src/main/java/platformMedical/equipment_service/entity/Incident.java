@@ -4,6 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 
 @Document(collection = "incidents")
@@ -18,8 +19,8 @@ public class Incident {
     private String id;
     private String equipmentId; // ID de l'équipement concerné
     private String reportedBy; // ID de l'utilisateur qui signale la panne
-    private Date reportedAt; // Date de déclaration de la panne
-    private Date resolvedAt; // Date de résolution (null si non résolue)
+    private LocalDateTime reportedAt; // Date de déclaration de la panne
+    private LocalDateTime resolvedAt; // Date de résolution (null si non résolue)
     private String status; // Statut : "En attente", "En cours", "Résolu"
     private String description; // Description de la panne
     private double penaltyApplied; // Montant de la pénalité appliquée si SLA non respecté
@@ -27,7 +28,10 @@ public class Incident {
     private String resolutionDetails; // Détail de ce qui a été fait
     private String validatedBy; // Ingénieur ayant validé
     private String hospitalId;
+    private LocalDateTime validatedAt;
     private String serviceId;
+    private Severity severity;
+
 
 }
 

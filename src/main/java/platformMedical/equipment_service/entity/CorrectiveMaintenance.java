@@ -4,6 +4,7 @@ import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 @Document(collection = "corrective_maintenances")
 @Getter
@@ -20,7 +21,7 @@ public class CorrectiveMaintenance {
     private String incidentId; // Pour traçabilité
     private String assignedTo; // ID utilisateur (société de maintenance)
     private String description;
-    private Date plannedDate;    // Date prévue d'intervention
-    private Date completedDate;  // Date réelle de fin
+    private LocalDateTime plannedDate;    // Date prévue d'intervention
+    private LocalDateTime completedDate;  // Date réelle de fin
     private String status;       // "Planifiée", "En cours", "Terminée"
 }
