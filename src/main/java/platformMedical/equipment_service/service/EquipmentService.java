@@ -28,6 +28,8 @@ public class EquipmentService {
     private final UserServiceClient userServiceClient;
     private final KafkaProducerService kafkaProducerService;
     private final HospitalServiceClient hospitalServiceClient;
+    private final EquipmentTransferHistoryRepository equipmentTransferHistoryRepository;
+
     // Générer un code série unique
     private String generateSerialCode() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
@@ -346,6 +348,16 @@ public class EquipmentService {
         // Envoyer la notification par email
         sendTransferEmail(user, oldSupervisorInfo, newSupervisorInfo, equipment, oldServiceName, newServiceName, description);
 
+        EquipmentTransferHistory history = new EquipmentTransferHistory();
+        history.setEquipmentId(equipmentId);
+        history.setOldServiceId(oldServiceId);
+        history.setNewServiceId(newServiceId);
+        history.setType("INTER_SERVICE");
+        history.setDescription(description);
+        history.setInitiatedByUserId(user.getId());
+        history.setInitiatedByName(user.getFirstName() + " " + user.getLastName());
+        equipmentTransferHistoryRepository.save(history);
+
         return equipment;
     }
 
@@ -481,6 +493,15 @@ public class EquipmentService {
         kafkaProducerService.sendMessage("notification-events", notificationEvent);
 
 
+        EquipmentTransferHistory history = new EquipmentTransferHistory();
+        history.setEquipmentId(equipmentId);
+        history.setOldHospitalId(oldHospitalId);
+        history.setNewHospitalId(newHospitalId);
+        history.setType("INTER_HOSPITAL");
+        history.setDescription(description);
+        history.setInitiatedByUserId(user.getId());
+        history.setInitiatedByName(user.getFirstName() + " " + user.getLastName());
+        equipmentTransferHistoryRepository.save(history);
 
         return equipment;
     }

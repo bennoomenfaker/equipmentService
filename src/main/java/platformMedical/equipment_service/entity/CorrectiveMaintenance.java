@@ -24,4 +24,5 @@ public class CorrectiveMaintenance {
     private LocalDateTime plannedDate;    // Date prévue d'intervention
     private LocalDateTime completedDate;  // Date réelle de fin
     private String status;       // "Planifiée", "En cours", "Terminée"
+    private  String resolutionDetails;
 }

@@ -120,6 +120,7 @@ public class IncidentService {
                 .plannedDate(incident.getReportedAt())
                 .completedDate(LocalDateTime.now()) // maintenant car on résout
                 .status("Terminée")
+                .resolutionDetails("")
                 .build();
 
         correctiveMaintenanceRepository.save(maintenance);
@@ -272,6 +273,22 @@ public class IncidentService {
                 .collect(Collectors.toList());
     }
 
+    private void createCorrectiveMaintenanceForSevereIncident(Incident incident, Equipment equipment) {
+        SLA sla = slaService.getSlaById(equipment.getSlaId())
+                .orElseThrow(() -> new ResourceNotFoundException("SLA non trouvé"));
+
+        CorrectiveMaintenance maintenance = CorrectiveMaintenance.builder()
+                .equipmentId(equipment.getId())
+                .incidentId(incident.getId())
+                .assignedTo(sla.getUserIdCompany())
+                .description(incident.getDescription())
+                .plannedDate(incident.getReportedAt())
+                .status("Planifié")
+                .resolutionDetails("")
+                .build();
+
+        correctiveMaintenanceRepository.save(maintenance);
+    }
 
 
     public Incident updateIncident(String incidentId, IncidentDTO updatedIncidentData, UserDTO user) {
@@ -317,6 +334,7 @@ public class IncidentService {
             existingIncident.setValidatedAt(null);
             equipment.setStatus("en service");
             equipmentRepository.save(equipment);
+
         }
 
         if ("En attente".equals(oldStatus) && "En cours".equals(newStatus)) {
@@ -332,6 +350,8 @@ public class IncidentService {
             existingIncident.setValidatedBy(updatedIncidentData.getValidatedBy());
             equipment.setStatus("en service");
             equipmentRepository.save(equipment);
+
+
         }
 
         // Mise à jour des autres champs
@@ -398,6 +418,14 @@ public class IncidentService {
             sendNotificationToCompanyForModerateIssue(equipment , user.getId());
         }
 
+
+        if  (severityEnum == Severity.MODERE || severityEnum == Severity.MAJEUR) {
+            createCorrectiveMaintenanceForSevereIncident(existingIncident, equipment);
+            notifyCorrectiveMaintenanceCreation(equipment, user.getId());
+
+        }
+
+
         return incidentRepository.save(existingIncident);
     }
 
@@ -434,6 +462,12 @@ public class IncidentService {
         // Si la panne est MODEREE, vous pouvez aussi envoyer une notification à la société
         if (severityEnum == Severity.MODERE) {
             sendNotificationToCompanyForModerateIssue(equipment , engineerId);
+        }
+
+        if  (severityEnum == Severity.MODERE || severityEnum == Severity.MAJEUR) {
+            createCorrectiveMaintenanceForSevereIncident(incident, equipment);
+            notifyCorrectiveMaintenanceCreation(equipment, engineerId);
+
         }
 
         return validatedIncident;
@@ -491,6 +525,41 @@ public class IncidentService {
 
         kafkaProducerService.sendMessage("notification-events", notificationEvent);
         log.info("Notification envoyée à la société pour un incident modéré sur l'équipement : " + equipment.getSerialCode());
+    }
+
+
+    private void notifyCorrectiveMaintenanceCreation(Equipment equipment, String engineerId) {
+        List<String> emails = new ArrayList<>();
+
+        // Récupérer la société via SLA
+        SLA sla = slaService.getSlaById(equipment.getSlaId())
+                .orElseThrow(() -> new ResourceNotFoundException("SLA non trouvé"));
+        UserDTO companyUser = userServiceClient.getUserById(token, sla.getUserIdCompany());
+        emails.add(companyUser.getEmail());
+
+        // Récupérer l’ingénieur
+        UserDTO engineer = userServiceClient.getUserById(token, engineerId);
+        emails.add(engineer.getEmail());
+
+        // Récupérer les administrateurs de l’hôpital
+        List<UserDTO> hospitalAdmins = userServiceClient.getUsersByHospitalAndRoles(
+                token,
+                equipment.getHospitalId(),
+                List.of("ROLE_HOSPITAL_ADMIN")
+        );
+        emails.addAll(hospitalAdmins.stream()
+                .map(UserDTO::getEmail)
+                .toList());
+
+        NotificationEvent notification = new NotificationEvent(
+                "Maintenance corrective planifiée",
+                "Une opération de maintenance corrective a été créée pour l’équipement : " +
+                        equipment.getNom() + " (Code : " + equipment.getSerialCode() + ").",
+                emails
+        );
+
+        kafkaProducerService.sendMessage("notification-events", notification);
+        log.info("Notification envoyée à la société, l'ingénieur et l'admin de l’hôpital pour la maintenance corrective de l’équipement : " + equipment.getSerialCode());
     }
 
     public void deleteIncidentById(String incidentId) {

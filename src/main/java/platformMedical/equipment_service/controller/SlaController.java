@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import platformMedical.equipment_service.entity.DTOs.SlaWithEquipmentDTO;
 import platformMedical.equipment_service.entity.SLA;
 import platformMedical.equipment_service.service.SlaService;
 
@@ -42,8 +43,8 @@ public class SlaController {
 
     // Lister les SLA d'un prestataire de maintenance
     @GetMapping("/provider/{maintenanceProviderId}")
-    public ResponseEntity<List<SLA>> getSlasByProvider(@PathVariable String maintenanceProviderId) {
-        List<SLA> slas = slaService.getSlasByUserCompany(maintenanceProviderId);
+    public ResponseEntity<List<SlaWithEquipmentDTO>> getSlasByProvider(@PathVariable String maintenanceProviderId) {
+        List<SlaWithEquipmentDTO> slas = slaService.getSlasWithEquipmentByCompany(maintenanceProviderId);
         return ResponseEntity.ok(slas);
     }
 

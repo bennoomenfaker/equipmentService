@@ -3,7 +3,10 @@ package platformMedical.equipment_service.service;
 import lombok.AllArgsConstructor;
 import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
+import platformMedical.equipment_service.entity.DTOs.EquipmentRequest;
 import platformMedical.equipment_service.entity.DTOs.NotificationEvent;
+import platformMedical.equipment_service.entity.DTOs.SlaWithEquipmentDTO;
+import platformMedical.equipment_service.entity.Equipment;
 import platformMedical.equipment_service.entity.Incident;
 import platformMedical.equipment_service.entity.SLA;
 import platformMedical.equipment_service.kafka.KafkaProducerService;
@@ -18,6 +21,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @AllArgsConstructor
@@ -25,6 +29,7 @@ public class SlaService {
 
     private final SLARepository slaRepository;
     private final IncidentRepository incidentRepository;
+    private final EquipmentRepository equipmentRepository;
     private final KafkaProducerService kafkaProducerService;
 
 
@@ -44,9 +49,49 @@ public class SlaService {
     }
 
     //  Lister les SLA d'un prestataire de maintenance
-    public List<SLA> getSlasByUserCompany(String userIdCompany) {
-        return slaRepository.findByUserIdCompany(userIdCompany);
+    public List<SlaWithEquipmentDTO> getSlasWithEquipmentByCompany(String userIdCompany) {
+        List<SLA> slas = slaRepository.findByUserIdCompany(userIdCompany);
+
+        return slas.stream().map(sla -> {
+            Equipment equipment = equipmentRepository.findById(sla.getEquipmentId()).orElse(null);
+           EquipmentRequest equipmentRequest = mapToEquipmentRequest(equipment);
+            return new SlaWithEquipmentDTO(
+                    sla.getId(),
+                    sla.getName(),
+                    sla.getMaxResponseTime(),
+                    sla.getMaxResolutionTime(),
+                    sla.getPenaltyAmount(),
+                    sla.getHospitalId(),
+                    sla.getUserIdCompany(),
+                    equipmentRequest
+            );
+        }).collect(Collectors.toList());
     }
+    private EquipmentRequest mapToEquipmentRequest(Equipment equipment) {
+        if (equipment == null) return null;
+
+        return new EquipmentRequest(
+                equipment.getNom(),
+                equipment.getSerialCode(),
+                equipment.getLifespan(),
+                equipment.getRiskClass(),
+                equipment.getHospitalId(),
+                equipment.getSerialCode(),
+                equipment.getAmount(),
+                equipment.getSupplier(),
+                equipment.getAcquisitionDate(),
+                equipment.getServiceId(),
+                equipment.getBrand().getName(),
+                equipment.getSparePartIds(),  // ou new ArrayList<>(equipment.getSparePartIds()) si besoin
+                equipment.getSlaId(),
+                equipment.getStartDateWarranty(),
+                equipment.getEndDateWarranty(),
+                equipment.isReception(),
+                equipment.getStatus()
+        );
+    }
+
+
 
     // Mise à jour d'un SLA
     public SLA updateSla(String slaId, SLA updatedSla) {
@@ -84,6 +129,8 @@ public class SlaService {
     public List<SLA> getSlasByHospital(String hospitalId) {
         return slaRepository.findByHospitalId(hospitalId);
     }
+
+
 
 
 
