@@ -26,3 +26,17 @@ public class EquipmentTransferService {
         return equipmentTransferHistoryRepository.findAll();
     }
 }
+
+    private String getServiceNameById(String serviceId) {
+        try {
+            ResponseEntity<HospitalServiceEntity> response = hospitalServiceClient.getServiceById(token, serviceId);
+            if (response.getBody() != null) {
+                return response.getBody().getName();
+            } else {
+                return "Nom du service inconnu";
+            }
+        } catch (Exception e) {
+            return "Nom du service inconnu";
+        }
+    }
+}
