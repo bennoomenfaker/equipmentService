@@ -65,4 +65,12 @@ public class SlaController {
         slaService.deleteSla(slaId);
         return ResponseEntity.noContent().build();
     }
+
+    // Vérifier la conformité SLA d'un incident
+    @PostMapping("/check-compliance/{incidentId}")
+    public ResponseEntity<String> checkSlaCompliance(@PathVariable String incidentId) {
+        String response =  slaService.checkSlaCompliance(incidentId);
+        return  ResponseEntity.ok(response);
+    }
+
 }

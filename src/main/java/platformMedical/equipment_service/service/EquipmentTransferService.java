@@ -1,6 +1,7 @@
 package platformMedical.equipment_service.service;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import platformMedical.equipment_service.entity.DTOs.EquipmentRequest;
@@ -15,6 +16,7 @@ import platformMedical.equipment_service.repository.EquipmentTransferHistoryRepo
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @AllArgsConstructor
 public class EquipmentTransferService {
@@ -26,9 +28,10 @@ public class EquipmentTransferService {
 
     public List<EquipmentTransferResponse> getTransfersByHospital(String hospitalId) {
         List<EquipmentTransferHistory> histories = equipmentTransferHistoryRepository.findByOldHospitalId(hospitalId);
-
+        log.info("histyory "+ histories);
         return histories.stream().map(history -> {
             Equipment equipment = equipmentRepository.findById(history.getEquipmentId()).orElse(null);
+            log.info("equip"+ equipment);
             String oldHospitalName = null;
             String newHospitalName = null;
 
@@ -87,7 +90,7 @@ public class EquipmentTransferService {
 
     private EquipmentRequest mapToEquipmentRequest(Equipment equipment) {
         if (equipment == null) return null;
-
+        log.info("map" +equipment + "equipmentId" + equipment.getId());
         return new EquipmentRequest(
                 equipment.getNom(),
                 equipment.getSerialCode(),

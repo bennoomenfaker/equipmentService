@@ -216,7 +216,7 @@ public class MaintenancePlanService {
                 message,
                 emails
         );
-        kafkaProducerService.sendMessage("notification-events", notificationEvent);
+        kafkaProducerService.sendMessage("notification-events-mail", notificationEvent);
     }
 
 
@@ -246,5 +246,33 @@ public class MaintenancePlanService {
                 })
                 .collect(Collectors.toList());
     }
+
+    public MessageResponse createMaintenancePlan(String equipmentId, MaintenancePlan maintenancePlan) {
+        try {
+            // Vérifier si l'équipement existe
+            Equipment equipment = equipmentRepository.findBySerialCode(equipmentId)
+                    .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
+            // Associer le plan à l'équipement
+            maintenancePlan.setEquipmentId(equipmentId);
+
+            // Enregistrer le plan de maintenance
+            MaintenancePlan savedPlan = maintenancePlanRepository.save(maintenancePlan);
+
+            // Ajouter le plan à la liste de l’équipement
+            if (equipment.getMaintenancePlans() == null) {
+                equipment.setMaintenancePlans(new ArrayList<>());
+            }
+            equipment.getMaintenancePlans().add(savedPlan);
+
+            // Sauvegarder l’équipement mis à jour
+            equipmentRepository.save(equipment);
+
+            return new MessageResponse("Plan de maintenance créé avec succès", savedPlan.getId());
+        } catch (Exception e) {
+            return new MessageResponse("Erreur lors de la création du plan de maintenance: " + e.getMessage());
+        }
+    }
+
 
 }

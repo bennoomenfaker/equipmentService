@@ -31,6 +31,9 @@ public class Incident {
     private LocalDateTime validatedAt;
     private String serviceId;
     private Severity severity;
+    private boolean slaResponseViolated = false;
+    private boolean slaResolutionViolated = false;
+
 
 
 }

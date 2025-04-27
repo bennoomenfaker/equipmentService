@@ -18,6 +18,21 @@ import java.util.List;
 public class MaintenancePlanController {
 
     private final MaintenancePlanService maintenancePlanService;
+
+    // Créer un plan de maintenance pour un équipement
+    @PostMapping("/{equipmentId}")
+    public ResponseEntity<MessageResponse> createMaintenancePlanForEquipment(
+            @PathVariable String equipmentId,
+            @RequestBody MaintenancePlan maintenancePlan) {
+        try {
+            MessageResponse response = maintenancePlanService.createMaintenancePlan(equipmentId, maintenancePlan);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Erreur lors de la création du plan de maintenance : " + e.getMessage()));
+        }
+    }
+
     // Récupérer un plan de maintenance par son ID
     @GetMapping("/{equipmentId}/{maintenancePlanId}")
     public ResponseEntity<MaintenancePlan> getMaintenancePlan(

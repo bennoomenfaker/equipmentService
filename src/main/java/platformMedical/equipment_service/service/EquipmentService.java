@@ -14,6 +14,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.text.NumberFormat;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -30,6 +35,7 @@ public class EquipmentService {
     private final HospitalServiceClient hospitalServiceClient;
     private final EquipmentTransferHistoryRepository equipmentTransferHistoryRepository;
 
+
     // Générer un code série unique
     private String generateSerialCode() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();
@@ -43,6 +49,11 @@ public class EquipmentService {
             return new MessageResponse("Un équipement avec ce nom existe déjà.");
         }
 
+        // Vérifier les dates de garantie
+        if (request.getStartDateWarranty() != null && request.getEndDateWarranty() != null
+                && request.getEndDateWarranty().before(request.getStartDateWarranty())) {
+            return new MessageResponse("La date de fin de garantie doit être postérieure à la date de début.");
+        }
 
         // Trouver le code EMDN correspondant
         EmdnNomenclature emdn = findByCodeRecursive(request.getEmdnCode())
@@ -61,10 +72,120 @@ public class EquipmentService {
                 .serialCode(serialNumber)
                 .reception(false)
                 .status("en attente de réception")
+                .acquisitionDate(request.getAcquisitionDate())
+                .amount(request.getAmount())
+                .startDateWarranty(request.getStartDateWarranty())
+                .endDateWarranty(request.getEndDateWarranty())
                 .build();
-        Equipment saveEquipment = equipmentRepository.save(equipment);
 
-        return new MessageResponse("Équipement créé avec succès." ,saveEquipment.getId() );
+        Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        // Envoyer les notifications
+        sendEquipmentCreationNotifications(savedEquipment);
+
+        return new MessageResponse("Équipement créé avec succès.", savedEquipment.getSerialCode());
+    }
+    private String formatDateToFrench(String rawDate) {
+        try {
+            DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH); // format ISO de LocalDate
+            LocalDate date = LocalDate.parse(rawDate, inputFormatter);
+            DateTimeFormatter frenchFormatter = DateTimeFormatter.ofPattern("EEEE dd MMMM yyyy", Locale.FRENCH);
+            return frenchFormatter.format(date);
+        } catch (Exception e) {
+            return rawDate;
+        }
+    }
+
+    private String formatAmount(String rawAmount) {
+        try {
+            double amount = Double.parseDouble(rawAmount);
+            NumberFormat nf = NumberFormat.getInstance(Locale.FRANCE);
+            nf.setMinimumFractionDigits(0);
+            return nf.format(amount) + " TND";
+        } catch (Exception e) {
+            return rawAmount;
+        }
+    }
+
+    // Méthode pour envoyer les notifications après création d'un équipement
+    private void sendEquipmentCreationNotifications(Equipment equipment) {
+        String token = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlcmJlbm5vb21lbkBnbWFpbC5jb20iLCJyb2xlIjoiUk9MRV9IT1NQSVRBTF9BRE1JTiIsImlhdCI6MTc0Mzg0NjM1MCwiZXhwIjoyMDU5MjA2MzUwfQ.BXDfRfGt5_zWvYwDe_ukWf2pQUgTLZxMHxX2INXaGbQ";
+
+        try {
+            // Récupérer l'admin de l'hôpital
+            UserDTO hospitalAdmin = userServiceClient.getAdminByHospitalId(token, equipment.getHospitalId());
+
+            // Récupérer les ingénieurs de maintenance de l'hôpital
+            List<UserDTO> maintenanceEngineers = userServiceClient.getUsersByHospitalAndRoles(
+                    token,
+                    equipment.getHospitalId(),
+                    List.of("ROLE_MAINTENANCE_ENGINEER")
+            );
+
+            // Liste des emails à notifier
+            List<String> emailsToNotify = new ArrayList<>();
+            if (hospitalAdmin != null) {
+                emailsToNotify.add(hospitalAdmin.getEmail());
+            }
+            maintenanceEngineers.forEach(engineer -> emailsToNotify.add(engineer.getEmail()));
+
+            // Récupérer le nom de l'hôpital
+            String hospitalName = hospitalServiceClient.getHospitalNameById(token, equipment.getHospitalId());
+
+            // Créer le contenu de l'email
+            String emailSubject = "Nouvel équipement affecté à votre hôpital";
+            String emailContent = String.format(
+                    "Un nouvel équipement a été affecté à votre hôpital %s:\n\n" +
+                            "Détails de l'équipement:\n" +
+                            "- Nom: %s\n" +
+                            "- Code Série: %s\n" +
+                            "- Code EMDN: %s\n" +
+                            "- Date d'acquisition: %s\n" +
+                            "- Montant d'acquisition: %s\n" +
+                            "- Période de garantie: %s à %s\n\n" +
+                            "Veuillez ajouter cet équipement à votre inventaire en saisissant le code série valide: %s",
+                    hospitalName,
+                    equipment.getNom(),
+                    equipment.getSerialCode(),
+                    equipment.getEmdnCode().getCode(),
+                    equipment.getAcquisitionDate() != null ? formatDateToFrench(equipment.getAcquisitionDate().toString()) : "Non spécifiée",
+                    equipment.getAmount() != 0 ? formatAmount(String.valueOf(equipment.getAmount())) :  0,
+                    equipment.getStartDateWarranty() != null ? formatDateToFrench(equipment.getStartDateWarranty().toString()) : "Non spécifiée",
+                    equipment.getEndDateWarranty() != null ? formatDateToFrench(equipment.getEndDateWarranty().toString()) : "Non spécifiée",
+                    equipment.getSerialCode()
+            );
+
+            // Envoyer la notification
+            NotificationEvent notificationEvent = new NotificationEvent(
+                    emailSubject,
+                    emailContent,
+                    emailsToNotify
+            );
+            kafkaProducerService.sendMessage("notification-events", notificationEvent);
+
+            // Création de l'événement spécifique aux équipements
+            EquipmentCreationEvent event = new EquipmentCreationEvent(
+                    equipment.getId(),
+                    equipment.getNom(),
+                    equipment.getSerialCode(),
+                    emailSubject,
+                    emailsToNotify,
+                    equipment.getHospitalId(),
+                    hospitalName,
+                    equipment.getEmdnCode().getCode(),
+                    equipment.getAcquisitionDate() != null ? equipment.getAcquisitionDate().toString() : null,
+                    String.valueOf(equipment.getAmount()),
+                    equipment.getStartDateWarranty() != null ? equipment.getStartDateWarranty().toString() : null,
+                    equipment.getEndDateWarranty() != null ? equipment.getEndDateWarranty().toString() : null
+            );
+
+
+            // Envoi via le topic spécifique
+            kafkaProducerService.sendMessage("equipment-service-create-equipment", event);
+
+        } catch (Exception e) {
+            log.error("Erreur lors de l'envoi des notifications pour le nouvel équipement", e);
+        }
     }
 
     public MessageResponse updateEquipmentAfterReception(String serialNumber, EquipmentRequest request) {
@@ -163,46 +284,61 @@ public class EquipmentService {
     public Equipment updateEquipment(String equipmentId, EquipmentRequest equipmentRequest) {
         Equipment equipment = equipmentRepository.findById(equipmentId)
                 .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
+
         // Vérifier que les champs obligatoires sont présents
-         if (equipmentRequest.getEmdnCode() == null || equipmentRequest.getLifespan() <= 0 || equipmentRequest.getRiskClass() == null) {
-             throw new IllegalArgumentException("Les champs obligatoires (code EMDN, lifespan, riskClass) doivent être renseignés."); }
-         // Vérifier si un équipement avec le même nom existe déjà, en excluant l'équipement actuel
-         if (!equipmentRequest.getNom().equals(equipment.getNom())) {
-             Optional<Equipment> existingEquipment = equipmentRepository.findByNom(equipmentRequest.getNom());
-             if (existingEquipment.isPresent()) {
-                 throw new RuntimeException("Un équipement avec ce nom existe déjà dans la base de données."); }
-         }
-         // Récupérer l'objet EmdnNomenclature à partir du code EMDN
-         EmdnNomenclature emdnCode = findByCodeRecursive(equipmentRequest.getEmdnCode())
-                 .orElseThrow(() -> new RuntimeException("Code EMDN non trouvé"));
-         // Récupérer ou créer la marque à partir du nom
-        Optional<Brand> existBrand = brandRepository.findByNameAndHospitalId(equipmentRequest.getBrand(), equipmentRequest.getHospitalId());
-         Brand brand = existBrand.get();
-         // Récupérer les pièces de rechange à partir des IDs
-         List<String> sparePartIds = new ArrayList<>();
-         if (equipmentRequest.getSparePartIds() != null && !equipmentRequest.getSparePartIds().isEmpty()) {
-             sparePartIds.addAll(equipmentRequest.getSparePartIds());
-             // Stocker uniquement les IDs
-             }
-         // Mettre à jour les champs modifiables
-         equipment.setEmdnCode(emdnCode);
-         equipment.setNom(equipmentRequest.getNom());
-         equipment.setAcquisitionDate(equipmentRequest.getAcquisitionDate());
-         equipment.setSupplier(equipmentRequest.getSupplier());
-         equipment.setRiskClass(equipmentRequest.getRiskClass());
-         equipment.setAmount(equipmentRequest.getAmount());
-         equipment.setLifespan(equipmentRequest.getLifespan());
-         equipment.setEndDateWarranty(equipmentRequest.getEndDateWarranty());
-         equipment.setStartDateWarranty(equipmentRequest.getStartDateWarranty());
-         equipment.setServiceId(equipmentRequest.getServiceId());
-         equipment.setHospitalId(equipmentRequest.getHospitalId());
-         equipment.setBrand(brand);
-         equipment.setSparePartIds(sparePartIds);
-         equipment.setStatus(equipmentRequest.getStatus());
-         equipment.setReception(equipmentRequest.isReception());
-         equipment.setSlaId(equipmentRequest.getSlaId());
-         return equipmentRepository.save(equipment);
+        if (equipmentRequest.getEmdnCode() == null || equipmentRequest.getLifespan() <= 0 || equipmentRequest.getRiskClass() == null) {
+            throw new IllegalArgumentException("Les champs obligatoires (code EMDN, lifespan, riskClass) doivent être renseignés.");
+        }
+
+        // Vérifier si un équipement avec le même nom existe déjà, en excluant l'équipement actuel
+        if (!equipmentRequest.getNom().equals(equipment.getNom())) {
+            Optional<Equipment> existingEquipment = equipmentRepository.findByNom(equipmentRequest.getNom());
+            if (existingEquipment.isPresent()) {
+                throw new RuntimeException("Un équipement avec ce nom existe déjà dans la base de données.");
+            }
+        }
+
+        // Récupérer l'objet EmdnNomenclature à partir du code EMDN
+        EmdnNomenclature emdnCode = findByCodeRecursive(equipmentRequest.getEmdnCode())
+                .orElseThrow(() -> new RuntimeException("Code EMDN non trouvé"));
+
+        // Récupérer ou créer la marque si brand est renseigné
+        if (equipmentRequest.getBrand() != null && !equipmentRequest.getBrand().trim().isEmpty()) {
+            Optional<Brand> existBrand = brandRepository.findByNameAndHospitalId(
+                    equipmentRequest.getBrand(), equipmentRequest.getHospitalId());
+
+            Brand brand = existBrand.orElseThrow(() ->
+                    new RuntimeException("Marque non trouvée pour le nom fourni"));
+
+            equipment.setBrand(brand);
+        }
+
+        // Récupérer les pièces de rechange à partir des IDs
+        List<String> sparePartIds = new ArrayList<>();
+        if (equipmentRequest.getSparePartIds() != null && !equipmentRequest.getSparePartIds().isEmpty()) {
+            sparePartIds.addAll(equipmentRequest.getSparePartIds());
+        }
+
+        // Mettre à jour les champs modifiables
+        equipment.setEmdnCode(emdnCode);
+        equipment.setNom(equipmentRequest.getNom());
+        equipment.setAcquisitionDate(equipmentRequest.getAcquisitionDate());
+        equipment.setSupplier(equipmentRequest.getSupplier());
+        equipment.setRiskClass(equipmentRequest.getRiskClass());
+        equipment.setAmount(equipmentRequest.getAmount());
+        equipment.setLifespan(equipmentRequest.getLifespan());
+        equipment.setEndDateWarranty(equipmentRequest.getEndDateWarranty());
+        equipment.setStartDateWarranty(equipmentRequest.getStartDateWarranty());
+        equipment.setServiceId(equipmentRequest.getServiceId());
+        equipment.setHospitalId(equipmentRequest.getHospitalId());
+        equipment.setSparePartIds(sparePartIds);
+        equipment.setStatus(equipmentRequest.getStatus());
+        equipment.setReception(equipmentRequest.isReception());
+        equipment.setSlaId(equipmentRequest.getSlaId());
+
+        return equipmentRepository.save(equipment);
     }
+
 
     public Optional<EmdnNomenclature> findByCodeRecursive(String code) {
         List<EmdnNomenclature> allNomenclatures = emdnNomenclatureRepository.findAll();
