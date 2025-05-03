@@ -1,4 +1,4 @@
-Création de l’équipement par le Ministère de la Santé
+Création de l’équipement 
 
 Champs obligatoires :
 nom, riskClass, emdnCode, lifespan, hospitalId
