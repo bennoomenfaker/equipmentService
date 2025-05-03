@@ -1,6 +1,7 @@
 package platformMedical.equipment_service.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import platformMedical.equipment_service.entity.CorrectiveMaintenance;
@@ -13,9 +14,11 @@ import platformMedical.equipment_service.repository.IncidentRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CorrectiveMaintenanceServiceImpl implements CorrectiveMaintenanceService {
@@ -85,30 +88,48 @@ public class CorrectiveMaintenanceServiceImpl implements CorrectiveMaintenanceSe
     @Override
     public List<CorrectiveMaintenanceResponseDTO> getCorrectiveMaintenancesByCompany(String userIdCompany) {
         List<CorrectiveMaintenance> maintenances = correctiveMaintenanceRepository.findByAssignedTo(userIdCompany);
+        log.info(userIdCompany);
+        return maintenances.stream()
+                .map(maintenance -> {
+                    Optional<Equipment> equipmentOpt = equipmentRepository.findById(maintenance.getEquipmentId());
+                    Optional<Incident> incidentOpt = incidentRepository.findById(maintenance.getIncidentId());
 
-        return maintenances.stream().map(maintenance -> {
-            Equipment equipment = equipmentRepository.findById(maintenance.getEquipmentId()).orElse(null);
+                    if (equipmentOpt.isEmpty() || incidentOpt.isEmpty()) {
+                        // Log l'erreur si nécessaire
+                        log.warn("Missing equipment or incident for maintenance ID: {}", maintenance.getId());
+                        return null;
+                    }
 
-            Optional<Incident> existingingIncident = incidentRepository.findById(maintenance.getIncidentId()) ;
-            HospitalServiceEntity hospitalServiceEntity = hospitalServiceClient.getServiceById(token , equipment.getServiceId()).getBody();
-            Incident incident = existingingIncident.get();
-            return new CorrectiveMaintenanceResponseDTO(
-                    maintenance.getId(),
-                    maintenance.getDescription(),
-                    maintenance.getStatus(),
-                    maintenance.getPlannedDate(),
-                    maintenance.getCompletedDate(),
-                    maintenance.getResolutionDetails(),
-                    equipment,
-                   incident,
-                    getUserSafely(maintenance.getAssignedTo()),
-                    getUserSafely(incident.getValidatedBy()),
-                    getUserSafely(incident.getResolvedBy()),
-                    hospitalServiceEntity
-            );
-        }).collect(Collectors.toList());
+                    Equipment equipment = equipmentOpt.get();
+                    Incident incident = incidentOpt.get();
+
+                    HospitalServiceEntity hospitalServiceEntity = null;
+                    try {
+                        hospitalServiceEntity = hospitalServiceClient
+                                .getServiceById(token, equipment.getServiceId())
+                                .getBody();
+                    } catch (Exception e) {
+                        log.error("Failed to fetch hospital service for serviceId: {}", equipment.getServiceId(), e);
+                    }
+
+                    return new CorrectiveMaintenanceResponseDTO(
+                            maintenance.getId(),
+                            maintenance.getDescription(),
+                            maintenance.getStatus(),
+                            maintenance.getPlannedDate(),
+                            maintenance.getCompletedDate(),
+                            maintenance.getResolutionDetails(),
+                            equipment,
+                            incident,
+                            getUserSafely(maintenance.getAssignedTo()),
+                            getUserSafely(incident.getValidatedBy()),
+                            getUserSafely(incident.getResolvedBy()),
+                            hospitalServiceEntity
+                    );
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
-
 
 
     @Override

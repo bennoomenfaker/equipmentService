@@ -1,6 +1,7 @@
 package platformMedical.equipment_service.service;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @AllArgsConstructor
 public class SlaService {
@@ -161,9 +163,50 @@ public class SlaService {
         Incident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Incident non trouvé"));
 
+        // Vérifier si une pénalité a déjà été appliquée
+        if (incident.getPenaltyApplied() > 0) {
+            // Récupérer le SLA associé à l'équipement
+            Optional<SLA> slaOpt = slaRepository.findByEquipmentId(incident.getEquipmentId());
+            if (!slaOpt.isPresent()) {
+                log.warn("Aucun SLA trouvé pour l'équipement : " + incident.getEquipmentId());
+                return "Pénalité déjà appliquée : " + incident.getPenaltyApplied() + " dt.\n";
+            }
+
+            SLA sla = slaOpt.get();
+            double responseHoursLate = 0;
+            double resolutionHoursLate = 0;
+
+            if (incident.getValidatedAt() != null && sla.getMaxResponseTime() > 0) {
+                long minutesResponse = Duration.between(incident.getReportedAt(), incident.getValidatedAt()).toMinutes();
+                if (minutesResponse > sla.getMaxResponseTime()) {
+                    responseHoursLate = (minutesResponse - sla.getMaxResponseTime()) / 60.0;
+                }
+            }
+
+            if (incident.getResolvedAt() != null && sla.getMaxResolutionTime() > 0) {
+                long minutesResolution = Duration.between(incident.getReportedAt(), incident.getResolvedAt()).toMinutes();
+                if (minutesResolution > sla.getMaxResolutionTime()) {
+                    resolutionHoursLate = (minutesResolution - sla.getMaxResolutionTime()) / 60.0;
+                }
+            }
+
+            double penaltyResponse = Math.round(responseHoursLate * sla.getPenaltyAmount() * 100.0) / 100.0;
+            double penaltyResolution = Math.round(resolutionHoursLate * sla.getPenaltyAmount() * 100.0) / 100.0;
+            double totalPenalty = Math.round((penaltyResponse + penaltyResolution) * 100.0) / 100.0;
+
+            return "Pénalité déjà appliquée : " + incident.getPenaltyApplied() + " dt.\n"
+                    + "- Retard réponse : " + String.format("%.2f", responseHoursLate) + " h × " + sla.getPenaltyAmount() + " dt/h = " + penaltyResponse + " dt\n"
+                    + "- Retard résolution : " + String.format("%.2f", resolutionHoursLate) + " h × " + sla.getPenaltyAmount() + " dt/h = " + penaltyResolution + " dt\n"
+                    + "- Montant total calculé : " + totalPenalty + " dt\n";
+        }
+
+
         // Récupérer le SLA associé à l'équipement
-        SLA sla = slaRepository.findByEquipmentId(incident.getEquipmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("SLA non trouvé"));
+        Optional<SLA> slaOpt = slaRepository.findByEquipmentId(incident.getEquipmentId());
+        if (!slaOpt.isPresent()) {
+            log.warn("Aucun SLA trouvé pour l'équipement : " + incident.getEquipmentId());
+        }
+        SLA sla = slaOpt.orElseThrow(() -> new ResourceNotFoundException("SLA non trouvé pour l'équipement : " + incident.getEquipmentId()));
 
         double totalPenalty = 0.0;
         boolean responseViolated = false;
@@ -219,7 +262,10 @@ public class SlaService {
         }
 
         // Appliquer la pénalité et marquer les violations
-        incident.setPenaltyApplied(totalPenalty);
+        if (totalPenalty > 0) {
+            incident.setPenaltyApplied(totalPenalty);
+        }
+
         incident.setSlaResponseViolated(responseViolated);
         incident.setSlaResolutionViolated(resolutionViolated);
         incidentRepository.save(incident);

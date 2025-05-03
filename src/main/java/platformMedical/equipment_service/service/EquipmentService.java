@@ -310,8 +310,10 @@ public class EquipmentService {
             Brand brand = existBrand.orElseThrow(() ->
                     new RuntimeException("Marque non trouvée pour le nom fourni"));
 
-            equipment.setBrand(brand);
+            equipment.setBrand(brand); // mise à jour uniquement si une marque valide est fournie
         }
+// sinon, ne rien changer au champ brand
+
 
         // Récupérer les pièces de rechange à partir des IDs
         List<String> sparePartIds = new ArrayList<>();
