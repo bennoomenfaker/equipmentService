@@ -8,6 +8,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import platformMedical.equipment_service.entity.*;
 import platformMedical.equipment_service.entity.DTOs.EquipmentRequest;
@@ -38,6 +40,7 @@ public class EquipmentServiceApplication {
                                    IncidentService incidentService) {
         return args -> {
             System.out.println("Initialisation de la base de données avec les nouvelles données...");
+            // 🛠️ Appel à la migration du champ supplier
 
             if (!isDatabaseEmpty(mongoTemplate)) {
                 System.out.println("Base de données déjà initialisée.");
@@ -62,22 +65,38 @@ public class EquipmentServiceApplication {
             );
 
             // *** Création des équipements ***
+
+
+            Supplier supplierABC1 = mongoTemplate.findOne(
+                    Query.query(Criteria.where("name").is("Philips Medical")),
+                    Supplier.class
+            );
+            if (supplierABC1 == null) {
+                supplierABC1 = Supplier.builder()
+                        .name("Philips Medical")
+                        .hospitalId("7a34da16-6bd3-4cc6-8aa6-c1d512c2bf4e")
+                        .email("philipsMedical@gmail.com")
+                        .tel("28409478")
+                        .build();
+                mongoTemplate.save(supplierABC1);
+            }
+
             MessageResponse equipment1 = equipmentService.createEquipment(
                     EquipmentRequest.builder()
                             .nom("Scanner IRM")
-                            .emdnCode("Z119011")
-                            .lifespan(10)
-                            .riskClass("Classe IIa")
-                            .hospitalId("7a34da16-6bd3-4cc6-8aa6-c1d512c2bf4e")
-                            .serviceId("d09282f5-e925-479e-be2f-058ba1c0ab2a")
-                            .brand("Beckman Coulter")
-                            .amount(120000.0)
-                            .supplier("Fournisseur ABC")
+                            .emdnCode("Z110102")
+                            .lifespan(5)
+                            .riskClass("Classe I")
+                            .hospitalId("d09282f5-e925-479e-be2f-058ba1c0ab2a")
+                            .serviceId("67bd9d2ee3dbea56f771281f")
+                            .brand("BD (Becton, Dickinson and Company)")
+                            .amount(25000.0)
+                            .supplierId(supplierABC1.getId())
                             .acquisitionDate(new Date())
                             .startDateWarranty(new Date())
                             .endDateWarranty(new Date(System.currentTimeMillis() + 2L * 365 * 24 * 60 * 60 * 1000))
-                            .build()
-            );
+        .build()
+);
 
             MessageResponse equipment2 = equipmentService.createEquipment(
                     EquipmentRequest.builder()
@@ -89,7 +108,7 @@ public class EquipmentServiceApplication {
                             .serviceId("67bd9d2ee3dbea56f771281f")
                             .brand("BD (Becton, Dickinson and Company)")
                             .amount(25000.0)
-                            .supplier("Fournisseur XYZ")
+                            .supplierId(supplierABC1.getId())
                             .acquisitionDate(new Date())
                             .startDateWarranty(new Date())
                             .endDateWarranty(new Date(System.currentTimeMillis() + 2L * 365 * 24 * 60 * 60 * 1000))

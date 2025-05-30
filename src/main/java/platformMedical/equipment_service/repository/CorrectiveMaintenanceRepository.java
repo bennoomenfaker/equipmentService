@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface CorrectiveMaintenanceRepository  extends MongoRepository<CorrectiveMaintenance , String> {
     List<CorrectiveMaintenance> findByAssignedTo(String userIdCompany);
+    List<CorrectiveMaintenance> findByEquipmentIdIn(List<String> equipmentIds);
+
 }

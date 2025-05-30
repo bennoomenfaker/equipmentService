@@ -28,6 +28,11 @@ public class EquipmentController {
         return equipmentService.createEquipment(equipment);
     }
 
+    @PostMapping("/createEquipment")
+    public MessageResponse createEquipment1(@RequestBody EquipmentRequest equipment) {
+        return equipmentService.createEquipment1(equipment);
+    }
+
     @PostMapping("/{equipmentId}/maintenance-plans")
     public Equipment addMaintenancePlan(@PathVariable String equipmentId, @RequestBody MaintenancePlan maintenancePlan) {
         return equipmentService.addMaintenancePlan(equipmentId, maintenancePlan);

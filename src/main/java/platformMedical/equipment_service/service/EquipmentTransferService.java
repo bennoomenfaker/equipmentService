@@ -28,7 +28,8 @@ public class EquipmentTransferService {
 
     public List<EquipmentTransferResponse> getTransfersByHospital(String hospitalId) {
         List<EquipmentTransferHistory> histories = equipmentTransferHistoryRepository.findByOldHospitalId(hospitalId);
-        log.info("histyory "+ histories);
+
+        log.info("histyory {}" , histories);
         return histories.stream().map(history -> {
             Equipment equipment = equipmentRepository.findById(history.getEquipmentId()).orElse(null);
             log.info("equip"+ equipment);
@@ -39,6 +40,7 @@ public class EquipmentTransferService {
                 oldHospitalName = getHospitalNameById(history.getOldHospitalId());
                 newHospitalName = getHospitalNameById(history.getNewHospitalId());
             }
+            log.info("equi hh {}" , equipment);
 
             return EquipmentTransferResponse.builder()
                     .transferId(history.getId())
@@ -93,22 +95,24 @@ public class EquipmentTransferService {
         log.info("map" +equipment + "equipmentId" + equipment.getId());
         return new EquipmentRequest(
                 equipment.getNom(),
-                equipment.getSerialCode(),
                 equipment.getLifespan(),
                 equipment.getRiskClass(),
                 equipment.getHospitalId(),
                 equipment.getSerialCode(),
                 equipment.getAmount(),
-                equipment.getSupplier(),
+                equipment.getSupplier().getName(),
                 equipment.getAcquisitionDate(),
                 equipment.getServiceId(),
-                equipment.getBrand().getName(),
                 equipment.getSparePartIds(),
                 equipment.getSlaId(),
                 equipment.getStartDateWarranty(),
                 equipment.getEndDateWarranty(),
                 equipment.isReception(),
-                equipment.getStatus()
+                equipment.getStatus(),
+                equipment.getUseCount(),
+                equipment.getUsageDuration(),
+                equipment.getLastUsedAt()
+
         );
     }
 

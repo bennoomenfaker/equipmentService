@@ -34,6 +34,7 @@ public class EquipmentService {
     private final KafkaProducerService kafkaProducerService;
     private final HospitalServiceClient hospitalServiceClient;
     private final EquipmentTransferHistoryRepository equipmentTransferHistoryRepository;
+    private final  SupplierRepository supplierRepository;
 
 
     // Générer un code série unique
@@ -44,10 +45,7 @@ public class EquipmentService {
     // Création d'un équipement par le Ministère de la Santé
     public MessageResponse createEquipment(EquipmentRequest request) {
         // Vérifier si un équipement avec le même nom existe déjà
-        Optional<Equipment> existingEquipment = equipmentRepository.findByNom(request.getNom());
-        if (existingEquipment.isPresent()) {
-            return new MessageResponse("Un équipement avec ce nom existe déjà.");
-        }
+
 
         // Vérifier les dates de garantie
         if (request.getStartDateWarranty() != null && request.getEndDateWarranty() != null
@@ -61,6 +59,10 @@ public class EquipmentService {
 
         // Générer un numéro de série
         String serialNumber = generateSerialCode();
+        Optional<Equipment> exist  = equipmentRepository.findBySerialCode(serialNumber);
+        if (exist.isPresent()) {
+            serialNumber = generateSerialCode();
+        }
 
         // Créer l'équipement
         Equipment equipment = Equipment.builder()
@@ -76,6 +78,8 @@ public class EquipmentService {
                 .amount(request.getAmount())
                 .startDateWarranty(request.getStartDateWarranty())
                 .endDateWarranty(request.getEndDateWarranty())
+                .fromMinistere(request.isFromMinistere())
+                .supplier(null)
                 .build();
 
         Equipment savedEquipment = equipmentRepository.save(equipment);
@@ -85,6 +89,65 @@ public class EquipmentService {
 
         return new MessageResponse("Équipement créé avec succès.", savedEquipment.getSerialCode());
     }
+
+    public MessageResponse createEquipment1(EquipmentRequest request) {
+        // Vérifier les dates de garantie
+        if (request.getStartDateWarranty() != null && request.getEndDateWarranty() != null
+                && request.getEndDateWarranty().before(request.getStartDateWarranty())) {
+            return new MessageResponse("La date de fin de garantie doit être postérieure à la date de début.");
+        }
+
+        // Trouver le code EMDN correspondant (recherche récursive dans la nomenclature)
+        EmdnNomenclature emdn = findByCodeRecursive(request.getEmdnCode())
+                .orElseThrow(() -> new RuntimeException("Code EMDN invalide"));
+
+        // Générer un numéro de série unique
+        String serialNumber;
+        do {
+            serialNumber = generateSerialCode();
+        } while (equipmentRepository.findBySerialCode(serialNumber).isPresent());
+
+        // Gestion de la marque : récupérer la marque existante ou lancer une erreur si inexistante
+        Brand brand = null;
+        if (request.getBrand() != null && !request.getBrand().trim().isEmpty()) {
+            brand = brandRepository.findByNameAndHospitalId(request.getBrand(), request.getHospitalId())
+                    .orElseThrow(() -> new RuntimeException("Marque non trouvée pour le nom fourni"));
+        }
+        // Récupérer le supplier par id envoyé dans la requête
+        Supplier supplier = null;
+        if (request.getSupplierId() != null && !request.getSupplierId().isEmpty()) {
+            supplier = supplierRepository.findById(request.getSupplierId())
+                    .orElseThrow(() -> new RuntimeException("Supplier non trouvé avec l'id : " + request.getSupplierId()));
+        }
+
+
+        // Créer l'équipement avec toutes les données
+        Equipment equipment = Equipment.builder()
+                .nom(request.getNom())
+                .emdnCode(emdn)
+                .lifespan(request.getLifespan())
+                .riskClass(request.getRiskClass())
+                .hospitalId(request.getHospitalId())
+                .serialCode(serialNumber)
+                .reception(true) // Par défaut true (comme dans le front)
+                .status("en service") // Statut initial
+                .acquisitionDate(request.getAcquisitionDate())
+                .amount(request.getAmount())
+                .startDateWarranty(request.getStartDateWarranty())
+                .endDateWarranty(request.getEndDateWarranty())
+                .fromMinistere(request.isFromMinistere())
+                .brand(brand)
+                .supplier(supplier)
+                .build();
+
+        Equipment savedEquipment = equipmentRepository.save(equipment);
+
+        // Envoyer les notifications à la création
+        sendEquipmentCreationNotifications(savedEquipment);
+
+        return new MessageResponse("Équipement créé avec succès.", savedEquipment.getSerialCode());
+    }
+
     private String formatDateToFrench(String rawDate) {
         try {
             DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH); // format ISO de LocalDate
@@ -208,6 +271,15 @@ public class EquipmentService {
             if (existingEquipment.isPresent()) {
                 return new MessageResponse("Un équipement avec ce nom existe déjà.");
             }
+            // Mettre à jour le Supplier via supplierId (à adapter si dans EquipmentRequest tu as supplierId au lieu de Supplier)
+            if (request.getSupplierId() != null && !request.getSupplierId().isEmpty()) {
+                Supplier supplier = supplierRepository.findById(request.getSupplierId())
+                        .orElseThrow(() -> new RuntimeException("Fournisseur non trouvé avec l'id " + request.getSupplierId()));
+                equipment.setSupplier(supplier);
+            } else {
+                // Si supplierId absent, tu peux choisir de ne rien changer ou de mettre null selon ton besoin
+                // equipment.setSupplier(null);
+            }
 
             // Trouver ou créer la marque
             Optional<Brand> existBrand = brandRepository.findByName(request.getBrand());
@@ -216,7 +288,6 @@ public class EquipmentService {
             equipment.setBrand(brand);
             equipment.setReception(true);
             equipment.setStatus("En service");
-            equipment.setSupplier(request.getSupplier());
             equipment.setAcquisitionDate(request.getAcquisitionDate());
             equipment.setAmount(request.getAmount());
             equipment.setEndDateWarranty(request.getEndDateWarranty());
@@ -285,12 +356,12 @@ public class EquipmentService {
         Equipment equipment = equipmentRepository.findById(equipmentId)
                 .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
 
-        // Vérifier que les champs obligatoires sont présents
+        // Validation des champs obligatoires
         if (equipmentRequest.getEmdnCode() == null || equipmentRequest.getLifespan() <= 0 || equipmentRequest.getRiskClass() == null) {
             throw new IllegalArgumentException("Les champs obligatoires (code EMDN, lifespan, riskClass) doivent être renseignés.");
         }
 
-        // Vérifier si un équipement avec le même nom existe déjà, en excluant l'équipement actuel
+        // Vérifier unicité du nom
         if (!equipmentRequest.getNom().equals(equipment.getNom())) {
             Optional<Equipment> existingEquipment = equipmentRepository.findByNom(equipmentRequest.getNom());
             if (existingEquipment.isPresent()) {
@@ -298,34 +369,37 @@ public class EquipmentService {
             }
         }
 
-        // Récupérer l'objet EmdnNomenclature à partir du code EMDN
+        // Récupérer l'objet EmdnNomenclature
         EmdnNomenclature emdnCode = findByCodeRecursive(equipmentRequest.getEmdnCode())
                 .orElseThrow(() -> new RuntimeException("Code EMDN non trouvé"));
 
-        // Récupérer ou créer la marque si brand est renseigné
+        // Gestion marque (brand)
         if (equipmentRequest.getBrand() != null && !equipmentRequest.getBrand().trim().isEmpty()) {
-            Optional<Brand> existBrand = brandRepository.findByNameAndHospitalId(
-                    equipmentRequest.getBrand(), equipmentRequest.getHospitalId());
-
-            Brand brand = existBrand.orElseThrow(() ->
-                    new RuntimeException("Marque non trouvée pour le nom fourni"));
-
-            equipment.setBrand(brand); // mise à jour uniquement si une marque valide est fournie
+            Brand brand = brandRepository.findByNameAndHospitalId(
+                            equipmentRequest.getBrand(), equipmentRequest.getHospitalId())
+                    .orElseThrow(() -> new RuntimeException("Marque non trouvée pour le nom fourni"));
+            equipment.setBrand(brand);
         }
-// sinon, ne rien changer au champ brand
 
-
-        // Récupérer les pièces de rechange à partir des IDs
+        // Récupérer les pièces de rechange
         List<String> sparePartIds = new ArrayList<>();
         if (equipmentRequest.getSparePartIds() != null && !equipmentRequest.getSparePartIds().isEmpty()) {
             sparePartIds.addAll(equipmentRequest.getSparePartIds());
         }
 
-        // Mettre à jour les champs modifiables
+        // Mettre à jour le Supplier via supplierId (à adapter si dans EquipmentRequest tu as supplierId au lieu de Supplier)
+        if (equipmentRequest.getSupplierId() != null && !equipmentRequest.getSupplierId().isEmpty()) {
+            Supplier supplier = supplierRepository.findById(equipmentRequest.getSupplierId())
+                    .orElseThrow(() -> new RuntimeException("Fournisseur non trouvé avec l'id " + equipmentRequest.getSupplierId()));
+            equipment.setSupplier(supplier);
+        } else {
+            equipment.setSupplier(null);
+        }
+
+        // Mise à jour des autres champs
         equipment.setEmdnCode(emdnCode);
         equipment.setNom(equipmentRequest.getNom());
         equipment.setAcquisitionDate(equipmentRequest.getAcquisitionDate());
-        equipment.setSupplier(equipmentRequest.getSupplier());
         equipment.setRiskClass(equipmentRequest.getRiskClass());
         equipment.setAmount(equipmentRequest.getAmount());
         equipment.setLifespan(equipmentRequest.getLifespan());
@@ -337,6 +411,10 @@ public class EquipmentService {
         equipment.setStatus(equipmentRequest.getStatus());
         equipment.setReception(equipmentRequest.isReception());
         equipment.setSlaId(equipmentRequest.getSlaId());
+        equipment.setUseCount(equipmentRequest.getUseCount());
+        equipment.setUsageDuration(equipmentRequest.getUsageDuration());
+        equipment.setLastUsedAt(equipmentRequest.getLastUsedAt());
+        equipment.setFromMinistere(equipmentRequest.isFromMinistere());
 
         return equipmentRepository.save(equipment);
     }
@@ -380,7 +458,7 @@ public class EquipmentService {
     }
 
     public List<Equipment> getAllNonReceivedEquipment() {
-        return equipmentRepository.findByReceptionFalse();
+        return equipmentRepository.findByReception(false);
     }
 
     // Mettre à jour le plan de maintenance pour un équipement spécifique

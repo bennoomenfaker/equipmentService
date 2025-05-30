@@ -16,6 +16,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -46,7 +49,7 @@ public class CorrectiveMaintenanceServiceImpl implements CorrectiveMaintenanceSe
         List<CorrectiveMaintenance> maintenances = correctiveMaintenanceRepository.findAll();
 
         return maintenances.stream().map(maintenance -> {
-            Equipment equipment = equipmentRepository.findById(maintenance.getEquipmentId()).orElse(null);
+            EquipmentMinimalProjection equipment =  equipmentRepository.findMinimalById(maintenance.getEquipmentId());
 
             Incident incident = null;
             HospitalServiceEntity hospitalServiceEntity = null;
@@ -85,31 +88,55 @@ public class CorrectiveMaintenanceServiceImpl implements CorrectiveMaintenanceSe
         }).collect(Collectors.toList());
     }
 
+
+
+
+
+    private final ExecutorService executorService = Executors.newFixedThreadPool(10); // Pool de threads pour `CompletableFuture`
+
     @Override
     public List<CorrectiveMaintenanceResponseDTO> getCorrectiveMaintenancesByCompany(String userIdCompany) {
         List<CorrectiveMaintenance> maintenances = correctiveMaintenanceRepository.findByAssignedTo(userIdCompany);
-        log.info(userIdCompany);
-        return maintenances.stream()
+        log.info("Récupération des maintenances pour la société: {}", userIdCompany);
+
+        return maintenances.parallelStream()
                 .map(maintenance -> {
-                    Optional<Equipment> equipmentOpt = equipmentRepository.findById(maintenance.getEquipmentId());
-                    Optional<Incident> incidentOpt = incidentRepository.findById(maintenance.getIncidentId());
+                    CompletableFuture<Optional<EquipmentMinimalProjection>> equipmentFuture = CompletableFuture.supplyAsync(() ->
+                                    Optional.ofNullable(equipmentRepository.findMinimalById(maintenance.getEquipmentId())), executorService)
+                            .exceptionally(ex -> {
+                                log.error("Erreur de récupération de l'équipement: {}", maintenance.getEquipmentId(), ex);
+                                return Optional.empty();
+                            });
+
+                    CompletableFuture<Optional<Incident>> incidentFuture = CompletableFuture.supplyAsync(() ->
+                                    incidentRepository.findById(maintenance.getIncidentId()), executorService)
+                            .exceptionally(ex -> {
+                                log.error("Erreur de récupération de l'incident: {}", maintenance.getIncidentId(), ex);
+                                return Optional.empty();
+                            });
+
+                    CompletableFuture<UserDTO> assignedToUserFuture = CompletableFuture.supplyAsync(() -> getUserSafely(maintenance.getAssignedTo()), executorService);
+                    CompletableFuture<UserDTO> validatedByUserFuture = incidentFuture.thenApplyAsync(incidentOpt -> getUserSafely(incidentOpt.map(Incident::getValidatedBy).orElse(null)), executorService);
+                    CompletableFuture<UserDTO> resolvedByUserFuture = incidentFuture.thenApplyAsync(incidentOpt -> getUserSafely(incidentOpt.map(Incident::getResolvedBy).orElse(null)), executorService);
+
+                    CompletableFuture<HospitalServiceEntity> hospitalServiceFuture = equipmentFuture.thenApplyAsync(equipmentOpt -> {
+                        try {
+                            return equipmentOpt.map(equipment -> hospitalServiceClient.getServiceById(token, equipment.getServiceId()).getBody()).orElse(null);
+                        } catch (Exception e) {
+                            log.error("Erreur lors de la récupération du service hospitalier pour serviceId: {}", equipmentOpt.map(EquipmentMinimalProjection::getServiceId).orElse("UNKNOWN"), e);
+                            return null;
+                        }
+                    }, executorService);
+
+                    // Attendre toutes les requêtes
+                    CompletableFuture.allOf(equipmentFuture, incidentFuture, assignedToUserFuture, validatedByUserFuture, resolvedByUserFuture, hospitalServiceFuture).join();
+
+                    Optional<EquipmentMinimalProjection> equipmentOpt = equipmentFuture.join();
+                    Optional<Incident> incidentOpt = incidentFuture.join();
 
                     if (equipmentOpt.isEmpty() || incidentOpt.isEmpty()) {
-                        // Log l'erreur si nécessaire
-                        log.warn("Missing equipment or incident for maintenance ID: {}", maintenance.getId());
+                        log.warn("Équipement ou incident manquant pour la maintenance ID: {}", maintenance.getId());
                         return null;
-                    }
-
-                    Equipment equipment = equipmentOpt.get();
-                    Incident incident = incidentOpt.get();
-
-                    HospitalServiceEntity hospitalServiceEntity = null;
-                    try {
-                        hospitalServiceEntity = hospitalServiceClient
-                                .getServiceById(token, equipment.getServiceId())
-                                .getBody();
-                    } catch (Exception e) {
-                        log.error("Failed to fetch hospital service for serviceId: {}", equipment.getServiceId(), e);
                     }
 
                     return new CorrectiveMaintenanceResponseDTO(
@@ -119,18 +146,17 @@ public class CorrectiveMaintenanceServiceImpl implements CorrectiveMaintenanceSe
                             maintenance.getPlannedDate(),
                             maintenance.getCompletedDate(),
                             maintenance.getResolutionDetails(),
-                            equipment,
-                            incident,
-                            getUserSafely(maintenance.getAssignedTo()),
-                            getUserSafely(incident.getValidatedBy()),
-                            getUserSafely(incident.getResolvedBy()),
-                            hospitalServiceEntity
+                            equipmentOpt.get(),
+                            incidentOpt.get(),
+                            assignedToUserFuture.join(),
+                            validatedByUserFuture.join(),
+                            resolvedByUserFuture.join(),
+                            hospitalServiceFuture.join()
                     );
                 })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
-
 
     @Override
     public CorrectiveMaintenance updateCorrectiveMaintenance(String id, CorrectiveMaintenance updated) {
@@ -185,4 +211,17 @@ public class CorrectiveMaintenanceServiceImpl implements CorrectiveMaintenanceSe
         }
         correctiveMaintenanceRepository.deleteById(id);
     }
+
+
+    @Override
+    public List<CorrectiveMaintenance> getCorrectiveMaintenancesByHospitalId(String hospitalId) {
+        List<String> equipmentIds = equipmentRepository.findByHospitalId(hospitalId)
+                .stream()
+                .map(Equipment::getId)
+                .collect(Collectors.toList());
+
+        return correctiveMaintenanceRepository.findByEquipmentIdIn(equipmentIds);
+    }
+
+
 }

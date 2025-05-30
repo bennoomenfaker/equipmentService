@@ -83,16 +83,20 @@ public class SlaService {
                 equipment.getHospitalId(),
                 equipment.getSerialCode(),
                 equipment.getAmount(),
-                equipment.getSupplier(),
+                equipment.getSupplier().getName(),
                 equipment.getAcquisitionDate(),
                 equipment.getServiceId(),
                 equipment.getBrand().getName(),
-                equipment.getSparePartIds(),  // ou new ArrayList<>(equipment.getSparePartIds()) si besoin
+                equipment.getSparePartIds(),
                 equipment.getSlaId(),
                 equipment.getStartDateWarranty(),
                 equipment.getEndDateWarranty(),
                 equipment.isReception(),
-                equipment.getStatus()
+                equipment.getStatus(),
+                equipment.getUseCount(),
+                equipment.getUsageDuration(),
+                equipment.getLastUsedAt(),
+                equipment.isFromMinistere()
         );
     }
 

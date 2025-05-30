@@ -21,7 +21,7 @@ public class CorrectiveMaintenanceResponseDTO {
     private String resolutionDetails;
 
 
-    private Equipment equipment;
+    private EquipmentMinimalProjection equipment;
     private Incident incident;
 
     private UserDTO assignedTo;

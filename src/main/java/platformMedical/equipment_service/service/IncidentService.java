@@ -89,7 +89,6 @@ public class IncidentService {
         );
 
         kafkaProducerService.sendMessage("notification-events", notificationEvent);
-
         return incident;
     }
 
@@ -292,6 +291,7 @@ public class IncidentService {
 
 
     public Incident updateIncident(String incidentId, IncidentDTO updatedIncidentData, UserDTO user) {
+        log.info(incidentId , updatedIncidentData , user);
         // Recherche de l'incident existant
         Incident existingIncident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Incident non trouvé avec l'ID : " + incidentId));

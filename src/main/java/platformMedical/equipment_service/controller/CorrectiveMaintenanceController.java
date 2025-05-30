@@ -42,5 +42,11 @@ public class CorrectiveMaintenanceController {
         correctiveMaintenanceService.deleteCorrectiveMaintenance(id);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/by-hospital/{hospitalId}")
+    public ResponseEntity<List<CorrectiveMaintenance>> getByHospitalId(@PathVariable String hospitalId) {
+        List<CorrectiveMaintenance> maintenances = correctiveMaintenanceService.getCorrectiveMaintenancesByHospitalId(hospitalId);
+        return ResponseEntity.ok(maintenances);
+    }
 }
 

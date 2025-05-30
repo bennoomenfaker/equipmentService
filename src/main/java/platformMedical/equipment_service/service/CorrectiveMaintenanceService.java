@@ -10,4 +10,5 @@ public interface CorrectiveMaintenanceService {
     List<CorrectiveMaintenanceResponseDTO> getCorrectiveMaintenancesByCompany(String userIdCompany);
     CorrectiveMaintenance updateCorrectiveMaintenance(String id, CorrectiveMaintenance updated);
     void deleteCorrectiveMaintenance(String id);
+    public List<CorrectiveMaintenance> getCorrectiveMaintenancesByHospitalId(String hospitalId);
 }
