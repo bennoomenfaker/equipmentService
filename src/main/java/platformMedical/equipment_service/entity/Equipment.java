@@ -36,7 +36,6 @@ public class Equipment {
     private String serviceId; // ID du service
     private String hospitalId; // ID de l'hôpital
     private Brand brand; // Marque
-    private List<String> sparePartIds = new ArrayList<>();
     private List<MaintenancePlan> maintenancePlans =  new ArrayList<>(); // Liste des plans de maintenance préventive
     private boolean reception = false; // Par défaut, non réceptionné
     private String slaId;

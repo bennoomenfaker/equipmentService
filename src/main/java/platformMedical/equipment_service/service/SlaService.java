@@ -87,7 +87,6 @@ public class SlaService {
                 equipment.getAcquisitionDate(),
                 equipment.getServiceId(),
                 equipment.getBrand().getName(),
-                equipment.getSparePartIds(),
                 equipment.getSlaId(),
                 equipment.getStartDateWarranty(),
                 equipment.getEndDateWarranty(),
@@ -135,10 +134,24 @@ public class SlaService {
 
 
     // Récupérer les SLA associés à un hôpital
-    public List<SLA> getSlasByHospital(String hospitalId) {
-        return slaRepository.findByHospitalId(hospitalId);
-    }
+    public List<SLADetailsDTO> getSLAsWithEquipmentByHospital(String hospitalId) {
+        List<SLA> slas = slaRepository.findByHospitalId(hospitalId);
+        List<SLADetailsDTO> results = new ArrayList<>();
 
+        for (SLA sla : slas) {
+            Equipment equipment = equipmentRepository.findById(sla.getEquipmentId()).orElse(null);
+            if (equipment != null) {
+                results.add(
+                        SLADetailsDTO.builder()
+                                .sla(sla)
+                                .equipmentNom(equipment.getNom())
+                                .serialCode(equipment.getSerialCode())
+                                .build()
+                );
+            }
+        }
+        return results;
+    }
 
 
 

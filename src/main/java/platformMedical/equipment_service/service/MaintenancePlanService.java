@@ -95,47 +95,6 @@ public class MaintenancePlanService {
         maintenancePlanRepository.deleteById(mainteannacePlanId);
     }
 
-    // Mettre à jour les plans de maintenance pour une pièce de rechange spécifique
-    public SparePart updateMaintenancePlansForSparePart(String sparePartId, List<MaintenancePlan> updatedPlans) {
-        // Récupérer la pièce de rechange associée
-        SparePart sparePart = sparePartRepository.findById(sparePartId)
-                .orElseThrow(() -> new RuntimeException("Pièce de rechange non trouvée"));
-
-        List<MaintenancePlan> newMaintenancePlans = new ArrayList<>();
-
-        for (MaintenancePlan updatedPlan : updatedPlans) {
-            if (updatedPlan.getId() != null && !updatedPlan.getId().isEmpty()) {
-                // Si l'ID du plan est présent, mettre à jour le plan existant
-                Optional<MaintenancePlan> existingPlanOpt = maintenancePlanRepository.findById(updatedPlan.getId());
-
-                if (existingPlanOpt.isPresent()) {
-                    // Mettre à jour les détails du plan existant
-                    MaintenancePlan existingPlan = existingPlanOpt.get();
-                    existingPlan.setMaintenanceDate(updatedPlan.getMaintenanceDate());
-                    existingPlan.setDescription(updatedPlan.getDescription());
-                    existingPlan.setSparePartId(updatedPlan.getSparePartId());
-                    maintenancePlanRepository.save(existingPlan);
-                    newMaintenancePlans.add(existingPlan);
-                } else {
-                    // Si le plan de maintenance n'existe pas, le créer
-                    updatedPlan.setSparePartId(sparePartId);
-                    MaintenancePlan newPlan = maintenancePlanRepository.save(updatedPlan);
-                    newMaintenancePlans.add(newPlan);
-                }
-            } else {
-                // Si l'ID est absent, c'est un nouveau plan à créer
-                updatedPlan.setSparePartId(sparePartId);
-                MaintenancePlan newPlan = maintenancePlanRepository.save(updatedPlan);
-                newMaintenancePlans.add(newPlan);
-            }
-        }
-
-        // Mettre à jour la liste des plans de maintenance dans la pièce de rechange
-        sparePart.setMaintenancePlans(newMaintenancePlans);
-
-        // Sauvegarder la pièce de rechange avec les nouveaux plans de maintenance
-        return sparePartRepository.save(sparePart);
-    }
 
 
     // Suivi des maintenances pour un équipement (exécuté automatiquement tous les jours à 8h)
@@ -160,24 +119,6 @@ public class MaintenancePlanService {
         }
     }
 
-    // Suivi des maintenances pour une pièce de rechange (exécuté automatiquement tous les jours à 8h)
-    @Scheduled(cron = "0 0 8 * * ?")
-    public void trackMaintenanceForSparePart() {
-        LocalDate today = LocalDate.now();
-        log.info("Exécution de trackMaintenanceForSparePart à 8h00");
-
-        List<SparePart> allSpareParts = sparePartRepository.findAll();
-
-        for (SparePart sparePart : allSpareParts) {
-            List<MaintenancePlan> maintenancePlans = sparePart.getMaintenancePlans();
-            for (MaintenancePlan plan : maintenancePlans) {
-                if (plan.getMaintenanceDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate().equals(today)) {
-                    // Envoyer une notification (ajustez le token si nécessaire)
-                    sendMaintenanceNotification(sparePart, plan, "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlcmJlbm5vb21lbkBnbWFpbC5jb20iLCJyb2xlIjoiUk9MRV9IT1NQSVRBTF9BRE1JTiIsImlhdCI6MTc0Mzg0NjM1MCwiZXhwIjoyMDU5MjA2MzUwfQ.BXDfRfGt5_zWvYwDe_ukWf2pQUgTLZxMHxX2INXaGbQ");
-                }
-            }
-        }
-    }
     private void sendMaintenanceNotification(Object entity, MaintenancePlan plan, String token) {
         String entityName;
         String serialCode;

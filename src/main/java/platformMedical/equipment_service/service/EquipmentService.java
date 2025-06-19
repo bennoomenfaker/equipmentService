@@ -295,14 +295,6 @@ public class EquipmentService {
             equipment.setServiceId(request.getServiceId());
             equipment.setSlaId(request.getSlaId());
 
-            // Vérifier et associer les pièces de rechange
-            if (request.getSparePartIds() != null && !request.getSparePartIds().isEmpty()) {
-                List<SparePart> spareParts = sparePartRepository.findAllById(request.getSparePartIds());
-                if (spareParts.size() != request.getSparePartIds().size()) {
-                    return new MessageResponse("Certaines pièces de rechange n'existent pas en base.");
-                }
-                equipment.setSparePartIds(request.getSparePartIds());
-            }
 
             // Sauvegarder l'équipement mis à jour
             Equipment updatedEquipment = equipmentRepository.save(equipment);
@@ -332,25 +324,9 @@ public class EquipmentService {
         return equipmentRepository.findByHospitalIdAndReception(hospitalId,true);
     }
 
-    // Récupérer toutes les pièces de rechange d'un équipement
-     public List<SparePart> getSparePartsByEquipmentId(String equipmentId) {
-        return sparePartRepository.findByEquipmentId(equipmentId);
-    }
 
-    // Ajouter une pièce de rechange à un équipement
-     public Equipment addSparePart(String equipmentId, SparePart sparePart) {
-        Equipment equipment = equipmentRepository.findById(equipmentId)
-                .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
-        // Associer la pièce de rechange à l'équipement
-         sparePart.setEquipmentId(equipmentId);
-         sparePart = sparePartRepository.save(sparePart);
-         // Sauvegarde et récupération de l'objet mis à jour
-         // Ajouter l'ID de la pièce de rechange dans la liste (éviter les doublons)
-         if (!equipment.getSparePartIds().contains(sparePart.getId())) {
-             equipment.getSparePartIds().add(sparePart.getId());
-         }
-         return equipmentRepository.save(equipment);
-    }
+
+
     // Mettre à jour les informations d'un équipement (ex: warranty, status, etc.)
     public Equipment updateEquipment(String equipmentId, EquipmentRequest equipmentRequest) {
         Equipment equipment = equipmentRepository.findById(equipmentId)
@@ -381,11 +357,7 @@ public class EquipmentService {
             equipment.setBrand(brand);
         }
 
-        // Récupérer les pièces de rechange
-        List<String> sparePartIds = new ArrayList<>();
-        if (equipmentRequest.getSparePartIds() != null && !equipmentRequest.getSparePartIds().isEmpty()) {
-            sparePartIds.addAll(equipmentRequest.getSparePartIds());
-        }
+
 
         // Mettre à jour le Supplier via supplierId (à adapter si dans EquipmentRequest tu as supplierId au lieu de Supplier)
         if (equipmentRequest.getSupplierId() != null && !equipmentRequest.getSupplierId().isEmpty()) {
@@ -407,7 +379,6 @@ public class EquipmentService {
         equipment.setStartDateWarranty(equipmentRequest.getStartDateWarranty());
         equipment.setServiceId(equipmentRequest.getServiceId());
         equipment.setHospitalId(equipmentRequest.getHospitalId());
-        equipment.setSparePartIds(sparePartIds);
         equipment.setStatus(equipmentRequest.getStatus());
         equipment.setReception(equipmentRequest.isReception());
         equipment.setSlaId(equipmentRequest.getSlaId());
@@ -511,18 +482,6 @@ public class EquipmentService {
     public void deleteEquipment(String equipmentId) {
         Equipment equipment = equipmentRepository.findById(equipmentId)
                 .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
-
-        // Supprimer les plans de maintenance associés aux pièces de rechange
-        List<MaintenancePlan> maintenancePlans = maintenancePlanRepository.findByEquipmentId(equipmentId);
-        for (MaintenancePlan plan : maintenancePlans) {
-            if (plan.getSparePartId() != null) {
-                // Supprimer les plans de maintenance liés à chaque pièce de rechange
-                maintenancePlanRepository.deleteBySparePartId(plan.getSparePartId());
-            }
-        }
-
-        // Supprimer les pièces de rechange liées
-        sparePartRepository.deleteByEquipmentId(equipmentId);
 
         // Supprimer les plans de maintenance liés directement à l'équipement (sans sparePartId)
         maintenancePlanRepository.deleteByEquipmentId(equipmentId);

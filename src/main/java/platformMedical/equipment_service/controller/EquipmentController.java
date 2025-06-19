@@ -43,15 +43,7 @@ public class EquipmentController {
         return equipmentService.getEquipmentByHospitalId(hospitalId);
     }
 
-    @GetMapping("/{equipmentId}/spare-parts")
-    public List<SparePart> getSparePartsByEquipmentId(@PathVariable String equipmentId) {
-        return equipmentService.getSparePartsByEquipmentId(equipmentId);
-    }
 
-    @PostMapping("/{equipmentId}/spare-parts")
-    public Equipment addSparePart(@PathVariable String equipmentId, @RequestBody SparePart sparePart) {
-        return equipmentService.addSparePart(equipmentId, sparePart);
-    }
 
     @PutMapping("/{equipmentId}")
     public Equipment updateEquipment(@PathVariable String equipmentId, @RequestBody EquipmentRequest updatedEquipment) {

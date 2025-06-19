@@ -87,8 +87,22 @@ public class IncidentService {
                 "Un incident a été signalé sur l’équipement : " + equipment.getNom(),
                 emailsToNotify
         );
+// Création de l’objet EmailRequest
+        EmailRequest emailRequest = new EmailRequest(
+                emailsToNotify,
+                "Nouvel incident signalé",
+                Map.of(
+                        "equipmentName", equipment.getNom(),
+                        "equipmentId", equipment.getId(),
+                        "incidentDescription", incident.getDescription(),
+                        "status", incident.getStatus(),
+                        "reportedAt", incident.getReportedAt().toString()
+                )
+        );
 
         kafkaProducerService.sendMessage("notification-events", notificationEvent);
+        kafkaProducerService.sendMessage("notification-events-mail", notificationEvent);
+
         return incident;
     }
 

@@ -1,6 +1,7 @@
 package platformMedical.equipment_service.service;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import platformMedical.equipment_service.entity.Alert;
 import platformMedical.equipment_service.entity.Equipment;
@@ -10,6 +11,7 @@ import platformMedical.equipment_service.repository.EquipmentRepository;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @AllArgsConstructor
 public class AlertService {
@@ -32,7 +34,7 @@ public class AlertService {
         List<String> equipmentIds = equipments.stream()
                 .map(Equipment::getId)
                 .toList();
-
+        log.info("Equipment IDs: {}", equipmentIds);
         // Étape 3: Récupérer toutes les alertes liées à ces équipements
         return alertRepository.findByEquipmentIdIn(equipmentIds);
     }

@@ -103,7 +103,6 @@ public class EquipmentTransferService {
                 equipment.getSupplier().getName(),
                 equipment.getAcquisitionDate(),
                 equipment.getServiceId(),
-                equipment.getSparePartIds(),
                 equipment.getSlaId(),
                 equipment.getStartDateWarranty(),
                 equipment.getEndDateWarranty(),

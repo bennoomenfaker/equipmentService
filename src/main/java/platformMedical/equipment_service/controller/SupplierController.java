@@ -34,7 +34,7 @@ public class SupplierController {
     // Créer un nouveau fournisseur
     @PostMapping
     public ResponseEntity<Supplier> createSupplier(@RequestBody Supplier supplier) {
-        Supplier savedSupplier = supplierService.updateSupplier(null, supplier); // Ou créer une méthode create si besoin
+        Supplier savedSupplier = supplierService.createSupplier(supplier); // Ou créer une méthode create si besoin
         return ResponseEntity.ok(savedSupplier);
     }
 

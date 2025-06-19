@@ -30,7 +30,6 @@ public class EquipmentRequest {
     private Date acquisitionDate;
     private String serviceId;
     private String brand;
-    private List<String> sparePartIds = new ArrayList<>();
     private String slaId;
     private Date startDateWarranty; // Date de début de la garantie
     private Date endDateWarranty; // Date de fin de la garantie
@@ -52,7 +51,6 @@ public class EquipmentRequest {
                             String supplierId,
                             Date acquisitionDate,
                             String serviceId,
-                            List<String> sparePartIds,
                             String slaId,
                             Date startDateWarranty,
                             Date endDateWarranty,
@@ -71,7 +69,6 @@ public class EquipmentRequest {
         this.supplierId = supplierId;
         this.acquisitionDate = acquisitionDate;
         this.serviceId = serviceId;
-        this.sparePartIds = sparePartIds != null ? new ArrayList<>(sparePartIds) : new ArrayList<>();
         this.slaId = slaId;
         this.startDateWarranty = startDateWarranty;
         this.endDateWarranty = endDateWarranty;
@@ -91,7 +88,6 @@ public class EquipmentRequest {
                             String supplierId,
                             Date acquisitionDate,
                             String serviceId,
-                            List<String> sparePartIds,
                             String slaId,
                             Date startDateWarranty,
                             Date endDateWarranty,
@@ -110,7 +106,6 @@ public class EquipmentRequest {
         this.supplierId = supplierId;
         this.acquisitionDate = acquisitionDate;
         this.serviceId = serviceId;
-        this.sparePartIds = sparePartIds != null ? new ArrayList<>(sparePartIds) : new ArrayList<>();
         this.slaId = slaId;
         this.startDateWarranty = startDateWarranty;
         this.endDateWarranty = endDateWarranty;

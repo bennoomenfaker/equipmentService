@@ -48,4 +48,7 @@ public class SupplierService {
         supplierRepository.save(supplier);
     }
 
+    public Supplier createSupplier(Supplier supplier) {
+        return supplierRepository.save(supplier);
+    }
 }

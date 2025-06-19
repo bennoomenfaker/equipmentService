@@ -123,8 +123,6 @@ public class EquipmentServiceApplication {
                             .supplier("Fournisseur C")
                             .hospitalId("7a34da16-6bd3-4cc6-8aa6-c1d512c2bf4e")
                             .serviceId("d09282f5-e925-479e-be2f-058ba1c0ab2a")
-                            .equipmentId(equipment1.getData()) // Correction
-                            .maintenancePlans(new ArrayList<>()) // Ajouter des plans de maintenance vides si nécessaire
                             .lots(Arrays.asList( // Ajouter un ou plusieurs lots
                                     SparePartLot.builder()
                                             .quantity(10) // Quantité du lot
@@ -143,8 +141,6 @@ public class EquipmentServiceApplication {
                             .supplier("Fournisseur D")
                             .hospitalId("d09282f5-e925-479e-be2f-058ba1c0ab2a")
                             .serviceId("67bd9d2ee3dbea56f771281f")
-                            .equipmentId(equipment2.getData()) // Correction
-                            .maintenancePlans(new ArrayList<>()) // Ajouter des plans de maintenance vides si nécessaire
                             .lots(Arrays.asList( // Ajouter un ou plusieurs lots
                                     SparePartLot.builder()
                                             .quantity(5) // Quantité du lot
@@ -156,9 +152,7 @@ public class EquipmentServiceApplication {
                             .build()
             );
 
-// Associer les pièces de rechange aux équipements
-            equipmentService.addSparePart(equipment1.getData(), sparePart1);
-            equipmentService.addSparePart(equipment2.getData(), sparePart2);
+
 
 
             // *** Création des SLA associés aux équipements ***

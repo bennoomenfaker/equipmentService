@@ -97,15 +97,6 @@ public class MaintenancePlanController {
         }
     }
 
-    @PostMapping("/trigger/spare-parts")
-    public ResponseEntity<?> triggerSparePartMaintenanceCheck(@RequestHeader("Authorization") String token) {
-        try {
-            maintenancePlanService.trackMaintenanceForSparePart(); // Appelle la méthode de service existante
-            return ResponseEntity.ok("Vérification manuelle de la maintenance des pièces de rechange déclenchée.");
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Erreur lors du déclenchement manuel de la vérification de la maintenance des pièces de rechange : " + e.getMessage());
-        }
-    }
 
     @DeleteMapping("/{maintenancePlanId}")
     public void deleteMaintenancePlan(@PathVariable String maintenancePlanId) {

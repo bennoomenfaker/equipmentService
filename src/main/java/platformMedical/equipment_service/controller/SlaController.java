@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import platformMedical.equipment_service.entity.DTOs.SLADetailsDTO;
 import platformMedical.equipment_service.entity.DTOs.SlaWithEquipmentDTO;
 import platformMedical.equipment_service.entity.SLA;
 import platformMedical.equipment_service.service.SlaService;
@@ -71,6 +72,15 @@ public class SlaController {
     public ResponseEntity<String> checkSlaCompliance(@PathVariable String incidentId) {
         String response =  slaService.checkSlaCompliance(incidentId);
         return  ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/hospital/{hospitalId}")
+    public ResponseEntity<List<SLADetailsDTO>> getSLAsByHospitalWithEquipment(
+            @PathVariable String hospitalId) {
+
+        List<SLADetailsDTO> slaDetails = slaService.getSLAsWithEquipmentByHospital(hospitalId);
+
+        return ResponseEntity.ok(slaDetails);
     }
 
 }

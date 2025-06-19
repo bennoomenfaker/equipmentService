@@ -2,6 +2,7 @@ package platformMedical.equipment_service.controller;
 
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import platformMedical.equipment_service.entity.Alert;
@@ -9,6 +10,7 @@ import platformMedical.equipment_service.service.AlertService;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/alerts")
 @RequiredArgsConstructor
@@ -20,6 +22,8 @@ public class AlertController {
     @GetMapping("/hospital/{hospitalId}")
     public ResponseEntity<List<Alert>> getAlertsByHospitalId(@PathVariable String hospitalId) {
         List<Alert> alerts = alertService.getAlertsByHospitalId(hospitalId);
+        log.info(hospitalId);
+        log.info(alerts.toString());
         return ResponseEntity.ok(alerts);
     }
 

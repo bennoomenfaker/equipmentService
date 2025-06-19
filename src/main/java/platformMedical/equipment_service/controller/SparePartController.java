@@ -1,89 +1,82 @@
 package platformMedical.equipment_service.controller;
 
-import lombok.AllArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import platformMedical.equipment_service.entity.MaintenancePlan;
+import platformMedical.equipment_service.entity.EmdnNomenclature;
 import platformMedical.equipment_service.entity.SparePart;
 import platformMedical.equipment_service.entity.SparePartLot;
 import platformMedical.equipment_service.service.SparePartService;
-
+import lombok.RequiredArgsConstructor;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/spare-parts")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class SparePartController {
 
     private final SparePartService sparePartService;
 
-    //  Créer une nouvelle pièce de rechange
+    //  Créer une pièce de rechange
     @PostMapping
     public ResponseEntity<SparePart> createSparePart(@RequestBody SparePart sparePart) {
-        SparePart createdSparePart = sparePartService.createSparePart(sparePart);
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdSparePart);
+        return ResponseEntity.ok(sparePartService.createSparePart(sparePart));
     }
 
-    //  Ajouter un lot à une pièce de rechange existante
+    //  Ajouter un lot à une pièce
     @PostMapping("/{sparePartId}/lots")
-    public ResponseEntity<SparePart> addLotToSparePart(
+    public ResponseEntity<SparePart> addLot(
             @PathVariable String sparePartId,
             @RequestBody SparePartLot newLot) {
-        SparePart updatedSparePart = sparePartService.addLotToSparePart(sparePartId, newLot);
-        return ResponseEntity.ok(updatedSparePart);
+        return ResponseEntity.ok(sparePartService.addLotToSparePart(sparePartId, newLot));
     }
 
-    //  Supprimer un lot spécifique d'une pièce de rechange
+    //  Supprimer un lot d'une pièce
     @DeleteMapping("/{sparePartId}/lots")
-    public ResponseEntity<SparePart> removeLotFromSparePart(
+    public ResponseEntity<SparePart> removeLot(
             @PathVariable String sparePartId,
             @RequestBody SparePartLot lotToRemove) {
-        SparePart updatedSparePart = sparePartService.removeLotFromSparePart(sparePartId, lotToRemove);
-        return ResponseEntity.ok(updatedSparePart);
+        return ResponseEntity.ok(sparePartService.removeLotFromSparePart(sparePartId, lotToRemove));
     }
 
-    //  Récupérer toutes les pièces de rechange d'un équipement
-    @GetMapping("/equipment/{equipmentId}")
-    public ResponseEntity<List<SparePart>> getSparePartsByEquipmentId(@PathVariable String equipmentId) {
-        return ResponseEntity.ok(sparePartService.getSparePartsByEquipmentId(equipmentId));
+    //  Obtenir toutes les pièces compatibles à un code EMDN (code fourni par le front)
+    @GetMapping("/by-emdn-code")
+    public ResponseEntity<List<SparePart>> getByEmdnCode(@RequestParam String code) {
+        return ResponseEntity.ok(sparePartService.getSparePartsByEmdnCode(code));
     }
 
-    // Récupérer toutes les pièces de rechange d'un hôpital
-    @GetMapping("/hospital/{hospitalId}")
-    public ResponseEntity<List<SparePart>> getSparePartsByHospitalId(@PathVariable String hospitalId) {
+    //  Obtenir toutes les pièces pour un hôpital
+    @GetMapping("/by-hospital/{hospitalId}")
+    public ResponseEntity<List<SparePart>> getByHospital(@PathVariable String hospitalId) {
         return ResponseEntity.ok(sparePartService.getSparePartsByHospitalId(hospitalId));
     }
 
-    //  Récupérer une pièce de rechange par son ID
+    //  Obtenir toutes les pièces d’un hôpital + code EMDN
+    @GetMapping("/by-hospital-and-emdn")
+    public ResponseEntity<List<SparePart>> getByHospitalAndEmdnCode(
+            @RequestParam String hospitalId,
+            @RequestParam String code) {
+        return ResponseEntity.ok(sparePartService.getSparePartsByHospitalAndEmdnCode(hospitalId, code));
+    }
+
+    //  Obtenir une pièce par ID
     @GetMapping("/{id}")
-    public ResponseEntity<SparePart> getSparePartById(@PathVariable String id) {
+    public ResponseEntity<SparePart> getById(@PathVariable String id) {
         return ResponseEntity.ok(sparePartService.getSparePartById(id));
     }
 
-    //  Mettre à jour une pièce de rechange
+    //  Modifier une pièce de rechange
     @PutMapping("/{id}")
-    public ResponseEntity<SparePart> updateSparePart(
+    public ResponseEntity<SparePart> update(
             @PathVariable String id,
             @RequestBody SparePart updatedSparePart) {
-        SparePart sparePart = sparePartService.updateSparePart(id, updatedSparePart);
-        return ResponseEntity.ok(sparePart);
+        return ResponseEntity.ok(sparePartService.updateSparePart(id, updatedSparePart));
     }
 
     //  Supprimer une pièce de rechange
-    @DeleteMapping("/{equipmentId}/spareParts/{sparePartId}")
-    public ResponseEntity<Void> deleteSparePartFromEquipment(
-            @PathVariable String equipmentId,
-            @PathVariable String sparePartId) {
-
-        sparePartService.deleteSparePart(equipmentId, sparePartId);
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+        sparePartService.deleteSparePart(id);
         return ResponseEntity.noContent().build();
     }
-    // Endpoint pour mettre à jour les plans de maintenance d'une pièce de rechange
-    @PutMapping("/{sparePartId}/maintenance-plans")
-    public ResponseEntity<SparePart> updateSparePartMaintenancePlans(@PathVariable String sparePartId, @RequestBody List<MaintenancePlan> updatedPlans) {
-        SparePart updatedSparePart = sparePartService.updateSparePartMaintenancePlans(sparePartId, updatedPlans);
-        return ResponseEntity.ok(updatedSparePart);
-    }
-
 }
+
