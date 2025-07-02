@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import platformMedical.equipment_service.entity.DTOs.*;
 import platformMedical.equipment_service.entity.Equipment;
+import platformMedical.equipment_service.entity.MaintenanceFrequency;
 import platformMedical.equipment_service.entity.MaintenancePlan;
 import platformMedical.equipment_service.entity.SparePart;
 import platformMedical.equipment_service.kafka.KafkaProducerService;
@@ -20,6 +21,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static platformMedical.equipment_service.entity.MaintenanceFrequency.MENSUELLE;
 
 
 @Service
@@ -56,34 +59,30 @@ public class MaintenancePlanService {
     }
 
 
-    // Mettre à jour un plan de maintenance
 // Mettre à jour un plan de maintenance
     public MessageResponse updateMaintenancePlan(String equipmentId, String maintenancePlanId, MaintenancePlan newPlanDetails) {
         try {
-            // Trouver l'équipement auquel appartient le plan de maintenance
+            // Vérifier si l'équipement existe
             Equipment equipment = equipmentRepository.findById(equipmentId)
                     .orElseThrow(() -> new RuntimeException("Équipement non trouvé"));
 
-            // Vérifier si le plan de maintenance existe
+            // Vérifier si le plan existe
             MaintenancePlan existingPlan = maintenancePlanRepository.findById(maintenancePlanId)
                     .orElseThrow(() -> new RuntimeException("Plan de maintenance non trouvé"));
 
-            // Mettre à jour les détails du plan de maintenance
+            // Mettre à jour les champs du plan
             existingPlan.setMaintenanceDate(newPlanDetails.getMaintenanceDate());
             existingPlan.setDescription(newPlanDetails.getDescription());
-            existingPlan.setSparePartId(newPlanDetails.getSparePartId());
+            existingPlan.setFrequency(newPlanDetails.getFrequency());
 
-            // Sauvegarder les modifications du plan de maintenance
+            // Sauvegarder le plan modifié
             maintenancePlanRepository.save(existingPlan);
 
-            // Mettre à jour l'équipement pour refléter la modification
+            // Mettre à jour la liste dans l'équipement
             equipment.getMaintenancePlans().removeIf(plan -> plan.getId().equals(maintenancePlanId));
             equipment.getMaintenancePlans().add(existingPlan);
-
-            // Sauvegarder l'équipement mis à jour
             equipmentRepository.save(equipment);
 
-            // Retourner un message de succès
             return new MessageResponse("Plan de maintenance mis à jour avec succès", existingPlan.getId());
         } catch (Exception e) {
             return new MessageResponse("Erreur lors de la mise à jour du plan de maintenance: " + e.getMessage());
@@ -95,12 +94,22 @@ public class MaintenancePlanService {
         maintenancePlanRepository.deleteById(mainteannacePlanId);
     }
 
+    public LocalDate calculateNextMaintenanceDate(LocalDate currentDate, MaintenanceFrequency frequency) {
+        return switch (frequency) {
+            case MENSUELLE -> currentDate.plusMonths(1);
+            case TRIMESTRIELLE -> currentDate.plusMonths(3);
+            case SEMESTRIELLE -> currentDate.plusMonths(6);
+            case ANNUELLE -> currentDate.plusYears(1);
+            default -> throw new IllegalArgumentException("Fréquence non supportée : " + frequency);
+        };
+    }
 
 
     // Suivi des maintenances pour un équipement (exécuté automatiquement tous les jours à 8h)
     @Scheduled(cron = "0 0 8 * * ?")
     public void trackMaintenanceForEquipment() {
         LocalDate today = LocalDate.now();
+        LocalDate twoDaysAfter = today.plusDays(2);
         log.info("Exécution de trackMaintenanceForEquipment à 8h00");
 
         List<Equipment> allEquipments = equipmentRepository.findAll();
@@ -108,18 +117,29 @@ public class MaintenancePlanService {
         for (Equipment equipment : allEquipments) {
             List<MaintenancePlan> maintenancePlans = equipment.getMaintenancePlans();
             for (MaintenancePlan plan : maintenancePlans) {
-                if (plan.getMaintenanceDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate().equals(today)) {
+                LocalDate maintenanceDate = plan.getMaintenanceDate().toInstant()
+                        .atZone(ZoneId.systemDefault()).toLocalDate();
+
+                if (maintenanceDate.equals(twoDaysAfter)) {
+                    // Notification à J-2
+                    sendMaintenanceNotification(equipment, plan, "J-2", "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlcmJlbm5vb21lbkBnbWFpbC5jb20iLCJyb2xlIjoiUk9MRV9IT1NQSVRBTF9BRE1JTiIsImlhdCI6MTc0Mzg0NjM1MCwiZXhwIjoyMDU5MjA2MzUwfQ.BXDfRfGt5_zWvYwDe_ukWf2pQUgTLZxMHxX2INXaGbQ");
+                } else if (maintenanceDate.equals(today)) {
+                    // Notification le jour même + mise à jour date
                     equipment.setStatus("en maintenance");
                     equipmentRepository.save(equipment);
 
-                    // Envoyer une notification (ajustez le token si nécessaire)
-                    sendMaintenanceNotification(equipment, plan, "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlcmJlbm5vb21lbkBnbWFpbC5jb20iLCJyb2xlIjoiUk9MRV9IT1NQSVRBTF9BRE1JTiIsImlhdCI6MTc0Mzg0NjM1MCwiZXhwIjoyMDU5MjA2MzUwfQ.BXDfRfGt5_zWvYwDe_ukWf2pQUgTLZxMHxX2INXaGbQ");
+                    sendMaintenanceNotification(equipment, plan, "AUJOURD'HUI", "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlcmJlbm5vb21lbkBnbWFpbC5jb20iLCJyb2xlIjoiUk9MRV9IT1NQSVRBTF9BRE1JTiIsImlhdCI6MTc0Mzg0NjM1MCwiZXhwIjoyMDU5MjA2MzUwfQ.BXDfRfGt5_zWvYwDe_ukWf2pQUgTLZxMHxX2INXaGbQ");
+
+                    // Mettre à jour la prochaine date de maintenance
+                    LocalDate nextDate = calculateNextMaintenanceDate(maintenanceDate, plan.getFrequency());
+                    plan.setMaintenanceDate(Date.from(nextDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+                    maintenancePlanRepository.save(plan); // Update en base
                 }
             }
         }
     }
 
-    private void sendMaintenanceNotification(Object entity, MaintenancePlan plan, String token) {
+    private void sendMaintenanceNotification(Object entity, MaintenancePlan plan, String phase, String token) {
         String entityName;
         String serialCode;
         String hospitalId;
@@ -130,28 +150,25 @@ public class MaintenancePlanService {
             serialCode = ((Equipment) entity).getSerialCode();
             hospitalId = ((Equipment) entity).getHospitalId();
             entityType = "équipement";
-        } else if (entity instanceof SparePart) {
-            entityName = ((SparePart) entity).getName();
-            serialCode = ((SparePart) entity).getId();  // ID de la pièce de rechange
-            hospitalId = ((SparePart) entity).getHospitalId();
-            entityType = "pièce de rechange";
         } else {
             throw new IllegalArgumentException("Type d'entité non pris en charge pour la notification.");
         }
 
-        // Récupérer le nom de l'hôpital
         String hospitalName = hospitalServiceClient.getHospitalNameById(token, hospitalId);
 
-        // Récupérer les utilisateurs concernés
         List<UserDTO> users = userServiceClient.getUsersByHospitalAndRoles(token, hospitalId,
                 List.of("ROLE_HOSPITAL_ADMIN", "ROLE_MAINTENANCE_ENGINEER"));
-
         List<String> emails = users.stream().map(UserDTO::getEmail).collect(Collectors.toList());
 
-        String message = "La maintenance Préventive de " + entityType + " [" + serialCode + " - " + entityName + "] à " +
-                hospitalName + " est prévue aujourd'hui.";
+        String message;
+        if ("J-2".equals(phase)) {
+            message = "La maintenance préventive de " + entityType + " [" + serialCode + " - " + entityName +
+                    "] à " + hospitalName + " est prévue dans 2 jours.";
+        } else {
+            message = "La maintenance préventive de " + entityType + " [" + serialCode + " - " + entityName +
+                    "] à " + hospitalName + " est prévue aujourd'hui.";
+        }
 
-        // Envoyer l'événement Kafka
         NotificationEvent notificationEvent = new NotificationEvent(
                 "Maintenance Préventive",
                 message,
@@ -166,9 +183,7 @@ public class MaintenancePlanService {
     public List<MaintenancePlan> getAllMaintenancePlansByHospital(String hospitalId, String token) {
         // Récupérer tous les plans de maintenance
         List<MaintenancePlan> allPlans = maintenancePlanRepository.findAll();
-        System.out.println("*************");
-        System.out.println("all plans" + allPlans);
-        log.info("res {}", allPlans);
+
 
         log.info(allPlans.toString());
         log.info("x"+allPlans);
@@ -179,9 +194,6 @@ public class MaintenancePlanService {
                     if (plan.getEquipmentId() != null) {
                         Equipment equipment = equipmentRepository.findById(plan.getEquipmentId()).orElse(null);
                         return equipment != null && hospitalId.equals(equipment.getHospitalId());
-                    } else if (plan.getSparePartId() != null) {
-                        SparePart sparePart = sparePartRepository.findById(plan.getSparePartId()).orElse(null);
-                        return sparePart != null && hospitalId.equals(sparePart.getHospitalId());
                     }
                     return false; // Exclure les plans sans equipmentId ni sparePartId
                 })

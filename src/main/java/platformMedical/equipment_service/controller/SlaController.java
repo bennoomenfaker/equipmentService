@@ -1,10 +1,13 @@
 package platformMedical.equipment_service.controller;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import platformMedical.equipment_service.entity.DTOs.EquipmentPenaltyDTO;
 import platformMedical.equipment_service.entity.DTOs.SLADetailsDTO;
+import platformMedical.equipment_service.entity.DTOs.SlaComplianceStats;
 import platformMedical.equipment_service.entity.DTOs.SlaWithEquipmentDTO;
 import platformMedical.equipment_service.entity.SLA;
 import platformMedical.equipment_service.service.SlaService;
@@ -12,6 +15,7 @@ import platformMedical.equipment_service.service.SlaService;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/slas")
 @AllArgsConstructor
@@ -83,4 +87,35 @@ public class SlaController {
         return ResponseEntity.ok(slaDetails);
     }
 
+
+
+
+    /*------------------*/
+    // 1. Taux de conformité SLA
+    @GetMapping("/compliance/{hospitalId}")
+    public ResponseEntity<SlaComplianceStats> getComplianceStats(@PathVariable String hospitalId) {
+        SlaComplianceStats stats = slaService.getSlaComplianceStats(hospitalId);
+        return ResponseEntity.ok(stats);
+    }
+
+    // 2. Total des pénalités par hôpital
+    @GetMapping("/penalties/hospital/{hospitalId}")
+    public ResponseEntity<Double> getTotalPenaltiesByHospital(@PathVariable String hospitalId) {
+        double total = slaService.getTotalPenaltiesByHospital(hospitalId);
+        return ResponseEntity.ok(total);
+    }
+
+    // 3. Total des pénalités par prestataire (company)
+    @GetMapping("/penalties/company/{companyId}")
+    public ResponseEntity<Double> getTotalPenaltiesByCompany(@PathVariable String companyId) {
+        double total = slaService.getTotalPenaltiesByCompany(companyId);
+        return ResponseEntity.ok(total);
+    }
+
+    // 4. Top 5 équipements les plus pénalisés
+    @GetMapping("/top-penalized-equipment/{hospitalId}")
+    public ResponseEntity<List<EquipmentPenaltyDTO>> getTopPenalizedEquipments(@PathVariable String hospitalId) {
+        List<EquipmentPenaltyDTO> list = slaService.getTopPenalizedEquipments(hospitalId);
+        return ResponseEntity.ok(list);
+    }
 }

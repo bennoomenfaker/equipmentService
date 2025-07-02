@@ -19,5 +19,5 @@ public class MaintenancePlan {
     private Date maintenanceDate; // Date de maintenance préventive
     private String description; // Description de la maintenance
     private String equipmentId; // ID de l'équipement associé
-    private String sparePartId; // ID de la pièce de rechange associée (optionnel)
+   private MaintenanceFrequency frequency;
 }

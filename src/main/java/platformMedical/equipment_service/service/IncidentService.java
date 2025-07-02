@@ -129,11 +129,11 @@ public class IncidentService {
                 .equipmentId(equipment.getId())
                 .incidentId(incident.getId())
                 .assignedTo(sla.getUserIdCompany()) // prestataire responsable
-                .description(resolutionDescription)
+                .description(incident.getDescription())
                 .plannedDate(incident.getReportedAt())
                 .completedDate(LocalDateTime.now()) // maintenant car on résout
                 .status("Terminée")
-                .resolutionDetails("")
+                .resolutionDetails(resolutionDescription)
                 .build();
 
         correctiveMaintenanceRepository.save(maintenance);
@@ -468,21 +468,9 @@ public class IncidentService {
         equipmentRepository.save(equipment);
         incidentRepository.save(validatedIncident);
 
-        // Si la panne est MAJEURE, on notifie la société de maintenance
-        if (severityEnum == Severity.MAJEUR) {
-            notifyCompany(equipment , engineerId);
-        }
 
-        // Si la panne est MODEREE, vous pouvez aussi envoyer une notification à la société
-        if (severityEnum == Severity.MODERE) {
-            sendNotificationToCompanyForModerateIssue(equipment , engineerId);
-        }
 
-        if  (severityEnum == Severity.MODERE || severityEnum == Severity.MAJEUR) {
-            createCorrectiveMaintenanceForSevereIncident(incident, equipment);
-            notifyCorrectiveMaintenanceCreation(equipment, engineerId);
 
-        }
 
         return validatedIncident;
     }

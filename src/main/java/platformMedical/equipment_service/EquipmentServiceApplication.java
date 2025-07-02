@@ -183,6 +183,8 @@ public class EquipmentServiceApplication {
                     MaintenancePlan.builder()
                             .maintenanceDate(new Date(System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000))
                             .description("Maintenance préventive annuelle pour Scanner IRM")
+                            .frequency(MaintenanceFrequency.SEMESTRIELLE)
+
                             .build()
             );
 
@@ -190,6 +192,7 @@ public class EquipmentServiceApplication {
                     MaintenancePlan.builder()
                             .maintenanceDate(new Date(System.currentTimeMillis() + 60L * 24 * 60 * 60 * 1000))
                             .description("Vérification des composants pour Prothèse 3D")
+                            .frequency(MaintenanceFrequency.ANNUELLE)
                             .build()
             );
 

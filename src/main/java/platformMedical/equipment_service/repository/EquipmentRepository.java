@@ -8,6 +8,7 @@ import platformMedical.equipment_service.entity.Equipment;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface EquipmentRepository extends MongoRepository<Equipment, String> {
@@ -30,4 +31,6 @@ public interface EquipmentRepository extends MongoRepository<Equipment, String> 
     EquipmentMinimalProjection findMinimalById(String id);
 
     Optional<Equipment> findBySerialCode(String serialNumber);
+
+    List<Equipment> findByIdIn(Set<String> equipmentIds);
 }

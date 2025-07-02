@@ -451,7 +451,7 @@ public class EquipmentService {
                         MaintenancePlan existingPlan = existingPlanOpt.get();
                         existingPlan.setMaintenanceDate(updatedPlan.getMaintenanceDate());
                         existingPlan.setDescription(updatedPlan.getDescription());
-                        existingPlan.setSparePartId(updatedPlan.getSparePartId());
+                        existingPlan.setFrequency(updatedPlan.getFrequency());
                         maintenancePlanRepository.save(existingPlan);
                         newMaintenancePlans.add(existingPlan);
                     } else {
